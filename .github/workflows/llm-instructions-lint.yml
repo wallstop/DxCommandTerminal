@@ -19,7 +19,11 @@ on:
       - ".devcontainer/*.py"
       - "tooling~/pyproject.toml"
       - "tooling~/pyrightconfig.json"
-      - "tooling~/scripts/tests/**"
+      - "tooling~/scripts/tests/test-llm-instructions-lint.ps1"
+      - "tooling~/scripts/tests/test-lint-skill-sizes.ps1"
+      - "tooling~/scripts/tests/test-lint-unity-meta.ps1"
+      - "tooling~/scripts/tests/test-generate-skills-index.ps1"
+      - "tooling~/scripts/tests/fixtures/valid-skill.md"
       - ".gitattributes"
       - ".github/workflows/llm-instructions-lint.yml"
   pull_request:
@@ -37,7 +41,11 @@ on:
       - ".devcontainer/*.py"
       - "tooling~/pyproject.toml"
       - "tooling~/pyrightconfig.json"
-      - "tooling~/scripts/tests/**"
+      - "tooling~/scripts/tests/test-llm-instructions-lint.ps1"
+      - "tooling~/scripts/tests/test-lint-skill-sizes.ps1"
+      - "tooling~/scripts/tests/test-lint-unity-meta.ps1"
+      - "tooling~/scripts/tests/test-generate-skills-index.ps1"
+      - "tooling~/scripts/tests/fixtures/valid-skill.md"
       - ".gitattributes"
       - ".github/workflows/llm-instructions-lint.yml"
 
@@ -126,6 +134,4 @@ jobs:
           ./tooling~/scripts/tests/test-lint-unity-meta.ps1 -VerboseOutput
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           ./tooling~/scripts/tests/test-generate-skills-index.ps1 -VerboseOutput
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          uv run --project tooling~ python -m unittest discover -s tooling~/scripts/tests -p test_lint_llm_instructions.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

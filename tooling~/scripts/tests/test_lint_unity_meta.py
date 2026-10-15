@@ -3,7 +3,7 @@
 The meta linter's first contract suite (the ps1 had none). Builds fixture
 roots with files on disk and synthetic `git ls-files` listings injected, so
 every rule runs in-process without spawning git; the git path and the CLI
-surface (including the real-repo self-lint CI runs) get their own tests.
+surface (including default root discovery) use isolated staged repositories.
 
 Pinned: the three rule classes (orphan metas, missing metas, guid rules),
 the folder-asset validity rule, the Unity-ignoration exemptions (dot-prefixed
@@ -360,18 +360,41 @@ class CliTests(unittest.TestCase):
             self.assertIn("Unity meta hygiene passed", result.stdout)
             self.assertIn("[meta-lint] OK: Assets/Foo.asset: meta present", result.stdout)
 
-    def test_cli_defaults_to_this_repo_and_passes(self) -> None:
-        """No --repo-root: the linter runs on the checkout it lives in - the
-        same real tree the Unity Meta Lint workflow and the pre-commit hook
-        lint."""
-        result = subprocess.run(
-            [sys.executable, str(LINTER_SCRIPT)],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        self.assertIn("[meta-lint] Summary:", result.stdout)
-        self.assertIn("Unity meta hygiene passed", result.stdout)
+    def test_cli_defaults_to_its_own_repo_from_an_unrelated_directory(self) -> None:
+        """Default root discovery must follow the script, independent of cwd."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "package"
+            copied_script = root / "tooling~" / "scripts" / "lint_unity_meta.py"
+            copied_script.parent.mkdir(parents=True)
+            copied_script.write_bytes(LINTER_SCRIPT.read_bytes())
+            unrelated = Path(temporary) / "unrelated"
+            unrelated.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "Foo.asset").write_text("content\n", encoding="utf-8")
+            (root / "Foo.asset.meta").write_text(
+                meta_text("a1b2c3d4e5f6a7b8c1d2e3f4a5b6c7d8"), encoding="utf-8"
+            )
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            command = [sys.executable, str(copied_script)]
+            result = subprocess.run(
+                command, cwd=unrelated, capture_output=True, text=True, check=True
+            )
+            self.assertIn("[meta-lint] Summary:", result.stdout)
+            self.assertIn("Unity meta hygiene passed", result.stdout)
+
+            subprocess.run(
+                ["git", "rm", "--cached", "-q", "--", "Foo.asset.meta"], cwd=root, check=True
+            )
+            missing_meta = subprocess.run(
+                command, cwd=unrelated, capture_output=True, text=True, check=False
+            )
+            self.assertEqual(missing_meta.returncode, 1)
+            self.assertIn(
+                "[meta-lint] ERROR: missing meta: 'Foo.asset' is visible to Unity "
+                "but 'Foo.asset.meta' is not tracked",
+                missing_meta.stdout,
+            )
+            self.assertIn("missing metas: 1", missing_meta.stdout)
 
 
 class InvalidPathTests(unittest.TestCase):
