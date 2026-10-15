@@ -12,6 +12,10 @@ on:
       - "Runtime/CommandTerminal/Backend/CommandArg.cs"
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
       - "tooling~/scripts/verify-analyzer-payload.ps1"
+      - "tooling~/scripts/verify_analyzer_payload.py"
+      - "tooling~/scripts/python-runner.ps1"
+      - "tooling~/scripts/tests/test_verify_analyzer_payload.py"
+      - "tooling~/pyproject.toml"
       - ".github/workflows/generator-tests.yml"
       - ".gitattributes"
   pull_request:
@@ -22,6 +26,10 @@ on:
       - "Runtime/CommandTerminal/Backend/CommandArg.cs"
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
       - "tooling~/scripts/verify-analyzer-payload.ps1"
+      - "tooling~/scripts/verify_analyzer_payload.py"
+      - "tooling~/scripts/python-runner.ps1"
+      - "tooling~/scripts/tests/test_verify_analyzer_payload.py"
+      - "tooling~/pyproject.toml"
       - ".github/workflows/generator-tests.yml"
       - ".gitattributes"
 
@@ -36,8 +44,7 @@ jobs:
   generator-tests:
     # Unity-free CI for the shell-discovery generator: the byte-compare needs
     # the pinned SDK (stable compilation → stable byte-compare), the test
-    # suite needs the harness, and the payload check needs pwsh
-    # (preinstalled on ubuntu-latest). Inspired by the unity-helpers'
+    # suite needs the harness. Inspired by the unity-helpers'
     # generator CI contract.
     name: generator-tests (ubuntu-latest)
     runs-on: ubuntu-latest
@@ -48,8 +55,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The test run + payload verification build the generator payload seven
-      # times; NuGet restore is the shared cold cost across them. Keyed on the
+      # NuGet restore is shared across tests and payload builds. Keyed on the
       # projects, so a PackageReference change invalidates the cache.
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -66,9 +72,17 @@ jobs:
       - name: Run generator tests
         run: dotnet test "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests.csproj" -c Release
 
-      # -TwoCheckout subsumes the plain payload check (the script always
-      # byte-compares shipped payloads to a fresh rebuild before the
-      # two-checkout reproducibility pass), so one invocation covers both.
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.24
+
+      - name: Test payload verifier with real compilers
+        run: uv run --project tooling~ python -m unittest discover -s tooling~/scripts/tests -p test_verify_analyzer_payload.py -v
+
       - name: Verify shipped analyzer payload and two-checkout reproducibility
         shell: pwsh
         run: ./tooling~/scripts/verify-analyzer-payload.ps1 -TwoCheckout
