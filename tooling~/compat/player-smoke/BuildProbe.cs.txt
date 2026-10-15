@@ -95,7 +95,7 @@ namespace DxCommandTerminal.T13.PlayerSmoke.Editor
                 {
                     throw new InvalidOperationException("Player build failed");
                 }
-                if (webGL)
+                if (webGL || string.Equals(Environment.GetEnvironmentVariable("DX_T13_BUILD_ONLY"), "1", StringComparison.Ordinal))
                 {
                     EditorApplication.Exit(0);
                     return;

@@ -121,3 +121,17 @@ acceptance, and performance gates remain separate.
 
 Run the release contract tests through `npm test` when changing these workflows. Keep immutable action SHA pins, minimal job permissions, and `persist-credentials=false`. Git
 pushes use the GitHub credential helper.
+
+### Player readiness measurements
+
+Run
+`uv run --project tooling~ python tooling~/scripts/t13/player_readiness.py --matrix-report <verified-import-matrix.json> --previous-player-report <owned-player-matrix.json> --out C:/dxt13/readiness`
+on the Windows host. The default cohort is Unity 2021 Mono with all three input profiles.
+
+The drill builds 1,000 generated consumer commands and launches 30 regular release players per profile. Each process measures its first shell readiness after Unity startup; the
+first process also measures 1,000 warmed shells after eight warmups. Timings include history/shell construction, deferred configuration, and registration. Catalog validation
+follows timing. Raw clock samples, timings, player identities, environment, and build hashes remain in the output.
+
+Both cold and warm p95 must stay below 5 ms. `executionPassed` records successful workload checks even when the timing gate fails; `passed` requires both. These measurements do not
+approve UI, input routing, numeric allocations, or pinned-editor recovery. A normal smoke run can restore the owned fixture by using the readiness matrix as its previous ownership
+report.
