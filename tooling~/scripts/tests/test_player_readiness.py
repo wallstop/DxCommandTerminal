@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import copy
 import json
+import io
+import subprocess
+import tarfile
+from unittest.mock import patch
 from pathlib import Path
 import sys
 import tempfile
@@ -93,6 +97,43 @@ class ReadinessTests(unittest.TestCase):
         for values in ([], [float("nan")], [float("inf")], [-1.0]):
             with self.assertRaises(ValueError):
                 readiness.distribution(values)
+
+    def test_payload_uses_the_verified_package_commit_after_harness_head_moves(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, project = root / "source", root / "project"
+            source.mkdir()
+            artifact = root / "artifact.unitypackage"
+            assets = {"package.json": b'{"version":"1.0.0"}', "Runtime/Analyzers/Generator.dll": b"generator"}
+            with tarfile.open(artifact, "w:gz") as archive:
+                for index, (relative, data) in enumerate(assets.items()):
+                    meta = f"fileFormatVersion: 2\nguid: {index:032x}\n".encode()
+                    for base in (source, project / "Packages/com.wallstop-studios.dxcommandterminal"):
+                        file = base / relative
+                        file.parent.mkdir(parents=True, exist_ok=True)
+                        file.write_bytes(data)
+                        file.with_name(file.name + ".meta").write_bytes(meta)
+                    for suffix, value in [("pathname", ("Packages/com.wallstop-studios.dxcommandterminal/" + relative).encode()), ("asset", data), ("asset.meta", meta)]:
+                        member = tarfile.TarInfo(f"{index:032x}/{suffix}")
+                        member.size = len(value)
+                        archive.addfile(member, io.BytesIO(value))
+            def git(*arguments: str) -> str:
+                return subprocess.check_output(["git", *arguments], cwd=source, text=True, stderr=subprocess.PIPE).strip()
+            git("init", "-q")
+            git("add", ".")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "Package")
+            original = git("rev-parse", "HEAD")
+            (source / "package.json").write_bytes(b'{"version":"2.0.0"}')
+            git("add", ".")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "Later tree")
+            self.assertNotEqual(original, git("rev-parse", "HEAD"))
+            with patch.object(readiness.smoke, "ROOT", source):
+                revision, hashes = readiness.verified_payload({"git": {"dirty": False, "revision": original}}, artifact, project)
+                self.assertEqual(revision, original)
+                self.assertTrue(hashes)
+                for metadata in ({}, {"dirty": False}, {"dirty": False, "revision": "HEAD"}, {"dirty": True, "revision": original}):
+                    with self.subTest(metadata=metadata), self.assertRaises(ValueError):
+                        readiness.verified_payload({"git": metadata}, artifact, project)
 
     def test_fixture_mode_changes_require_full_ownership_and_can_restore_smoke(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

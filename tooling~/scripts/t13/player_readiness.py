@@ -79,6 +79,16 @@ def summarize(reports: list[dict[str, Any]], command_count: int = 1000) -> dict[
     return result
 
 
+def verified_payload(leg: dict[str, Any], artifact: Path, project: Path) -> tuple[str, dict[str, str]]:
+    metadata = leg.get("git")
+    if not isinstance(metadata, dict) or metadata.get("dirty") is not False:
+        raise ValueError("Verified import has no clean package source revision")
+    revision = metadata.get("revision")
+    if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise ValueError("Verified import has no exact package source revision")
+    return revision, smoke.validate_payload(artifact, project, revision)
+
+
 def run_leg(leg: dict[str, Any], output: Path, previous: dict[str, Any] | None, timeout: int, command_count: int = 1000) -> dict[str, Any]:
     output.mkdir(parents=True, exist_ok=False)
     project, unity, artifact = (Path(leg[name]) for name in ("project", "unity", "artifact"))
@@ -97,7 +107,7 @@ def run_leg(leg: dict[str, Any], output: Path, previous: dict[str, Any] | None, 
         if smoke.parse_editor_version(record["editorVersionProbe"]) != version:
             raise ValueError("Editor version differs")
         smoke.validate_profile(project, profile)
-        record["payloadHashes"] = smoke.validate_payload(artifact, project, revision)
+        record["packageSourceRevision"], record["payloadHashes"] = verified_payload(leg, artifact, project)
         record["fixtureHashes"] = smoke.install_fixtures(project, previous, profile, readiness=True, command_count=command_count)
         record["fixtureSources"] = {name: smoke.sha256(smoke.FIXTURES / name) for name in ("ReadinessProbe.cs.txt", "BuildProbe.cs.txt")}
         environment = dict(os.environ, DX_T13_PLAYER_OUT=str(output), DX_T13_INPUT_PROFILE=profile, DX_T13_BACKEND="Mono", DX_T13_STRIPPING="Low", DX_T13_TARGET="StandaloneWindows64", DX_T13_BUILD_ONLY="1")
