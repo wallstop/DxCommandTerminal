@@ -61,18 +61,20 @@ export function buildChecks() {
           trees and finish in seconds, so a key saves nothing worth its
           staleness. Local selection mirrors the CI steps so a tooling
           change fails here first, not in a pushed branch's CI run.
+
+          One interpreter for all four suites (CI keeps one discover step
+          each): measured 4.1 s -> 1.0 s standalone here, more saved under
+          preflight's parallel load. unittest aggregates the module list
+          without failing between suites, and any suite failure still
+          fails the gate's exit code. The cwd option hosts the suites'
+          own directory; a shell `cd` would make this gate the only one
+          parsing a tilde path through cmd.exe on Windows.
        */
       name: "python-tests",
       cache: false,
       startBeforeCache: true,
-      command: [
-        "test_verify_opencode.py",
-        "test_player_smoke.py",
-        "test_player_readiness.py",
-        "test_webgl_player.py"
-      ]
-        .map((pattern) => `${process.platform === "win32" ? "python" : "python3"} -m unittest discover -s tooling~/scripts/tests -p ${pattern}`)
-        .join(" && ")
+      cwd: "tooling~/scripts/tests",
+      command: `${process.platform === "win32" ? "python" : "python3"} -m unittest test_verify_opencode test_player_smoke test_player_readiness test_webgl_player`
     },
     {
       name: "t11-check",
@@ -388,7 +390,7 @@ function runOne(check) {
     const startedAt = Date.now();
     const child = spawn(check.command, {
       shell: true,
-      cwd: REPO_ROOT,
+      cwd: check.cwd ? path.resolve(REPO_ROOT, check.cwd) : REPO_ROOT,
       stdio: ["ignore", "pipe", "pipe"]
     });
     let output = "";

@@ -1,15 +1,15 @@
-"""Line-limit linter for the authored LLM context files (issue #220 stage 1).
+"""Line-limit linter for the authored LLM context files (issue #220).
 
-The typed-python port of tooling~/scripts/lint-skill-sizes.ps1. Checks every
-authored file under .llm/ (context.md, skills, references, code samples - any
-text file) against the size thresholds the repo's rule 1 enforcement defines:
+Checks every authored file under .llm/ (context.md, skills, references,
+code samples - any text file) against the size thresholds the repo's rule 1
+enforcement defines:
 
 - >300 lines: ERROR (must split/reduce - hard limit).
 - 270-300 lines: CRITICAL warning, always shown; exit 0 unless fail_on_critical.
 - <=269 lines: OK, reported under verbose output.
 
 The generated .llm/skills/index.md is exempt: it is machine-written by
-generate-skills-index.ps1, not an authored file.
+generate_skills_index.py, not an authored file.
 
 Stated limit: python splits a few unicode characters as line breaks that
 .NET's ReadAllLines does not (\v, \f, \x1c-\x1e, \x85, \u2028, \u2029), so

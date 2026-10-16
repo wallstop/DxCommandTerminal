@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import io
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -123,30 +122,6 @@ class SkillsIndexTests(unittest.TestCase):
         self.check_normal_verbose_process([sys.executable, str(REPO_ROOT / "tooling~" / "scripts" / "generate_skills_index.py")],
                                           ["--repo-root", str(self.root), "--verbose-output"])
 
-    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required for wrapper process coverage")
-    def test_powershell_normal_verbose_keeps_diagnostics_on_stdout(self) -> None:
-        wrapper = REPO_ROOT / "tooling~" / "scripts" / "generate-skills-index.ps1"
-        self.check_normal_verbose_process(["pwsh", "-NoProfile", "-File", str(wrapper)],
-                                          ["-RepoRoot", str(self.root), "-VerboseOutput"])
-
-    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required for wrapper process coverage")
-    def test_powershell_dot_source_custom_output_and_integer_return(self) -> None:
-        self.skill("alpha", "---\ndescription: Text\n---\nbody")
-        wrapper = REPO_ROOT / "tooling~" / "scripts" / "generate-skills-index.ps1"
-        output = self.root / "custom index.md"
-        driver = self.root / "driver.ps1"
-        driver.write_text(". $args[0]; $code = New-SkillsIndex -RepoRoot $args[1] -OutputPath $args[2]; "
-                          "if ($code -isnot [int]) { exit 99 }; exit $code", encoding="utf-8")
-        command = ["pwsh", "-NoProfile", "-File", str(driver), str(wrapper), str(self.root), str(output)]
-        result = subprocess.run(command, capture_output=True, check=False, timeout=60)
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(index_content(self.skills).encode("utf-8"), output.read_bytes())
-        self.assertFalse((self.skills / "index.md").exists())
-        self.skills.rename(self.root / "saved-skills")
-        failed = subprocess.run(command, capture_output=True, check=False, timeout=60)
-        self.assertEqual(1, failed.returncode, failed.stderr)
-        self.assertIn(b"Skills directory not found", failed.stdout)
-
     def check_normal_verbose_process(self, command: list[str], arguments: list[str]) -> None:
         self.skill("alpha", "---\ndescription: Text\n---\nbody")
         self.skill("skipped", "missing frontmatter")
@@ -161,17 +136,6 @@ class SkillsIndexTests(unittest.TestCase):
         self.assertEqual(1, failed.returncode, failed.stderr)
         self.assertIn(b"Skills directory not found", failed.stdout)
         self.assertEqual(b"", failed.stderr)
-
-    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required for wrapper process coverage")
-    def test_powershell_stdout_bytes_and_diagnostics(self) -> None:
-        wrapper = REPO_ROOT / "tooling~" / "scripts" / "generate-skills-index.ps1"
-        command = ("[Console]::OutputEncoding = [System.Text.Encoding]::ASCII; "
-                   ". $args[0]; $code = New-SkillsIndex -RepoRoot $args[1] -Stdout -VerboseOutput "
-                   "-OutputPath (Join-Path $args[1] 'stdout.md'); "
-                   "if ($code -isnot [int]) { exit 99 }; exit $code")
-        driver = self.root / "driver.ps1"
-        driver.write_text(command, encoding="utf-8")
-        self.check_stdout_process(["pwsh", "-NoProfile", "-File", str(driver), str(wrapper)], [str(self.root)])
 
     def check_stdout_process(self, command: list[str], arguments: list[str]) -> None:
         self.skill("unicode", "---\ndescription: Caf\u00e9 \u65e5\u672c \U0001f600\n---\nbody")

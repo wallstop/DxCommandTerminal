@@ -112,9 +112,9 @@ def lint_llm_instructions(repo_root: Path = REPO_ROOT, *, fix: bool = False,
     skills = repo_root / ".llm/skills"
     context = repo_root / ".llm/context.md"
     index = skills / "index.md"
-    generator = Path(__file__).with_name("generate-skills-index.ps1")
+    generator = Path(__file__).with_name("generate_skills_index.py")
     required = [(skills, "Skills directory"), (context, "context.md"),
-                (generator, "generate-skills-index.ps1")]
+                (generator, "generate_skills_index.py")]
     required.extend((repo_root / path, label) for path, _, label in ENTRYPOINTS)
     info("Checking required paths...")
     for path, label in required:
@@ -171,7 +171,7 @@ def lint_llm_instructions(repo_root: Path = REPO_ROOT, *, fix: bool = False,
                     return 1
                 success("Generated missing index.md")
             else:
-                error("index.md does not exist. Run: pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1")
+                error("index.md does not exist. Run: uv run --project tooling~ python tooling~/scripts/generate_skills_index.py")
                 return 1
         current = read_text(index).replace("\r\n", "\n")
         if current != expected:
@@ -191,7 +191,7 @@ def lint_llm_instructions(repo_root: Path = REPO_ROOT, *, fix: bool = False,
                         shown += 1
                         if shown == 5:
                             break
-                write("Run: pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1 (or this lint with -Fix)")
+                write("Run: uv run --project tooling~ python tooling~/scripts/generate_skills_index.py (or this lint with --fix)")
                 exit_code = 1
         else:
             success("Skills index is up to date")

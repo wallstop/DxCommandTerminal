@@ -21,6 +21,20 @@ set -uo pipefail
 # mask the file-sourced values these assertions check.
 unset BASH_ENV
 
+# Every managed credential name `ai-backends.sh env` can export. An interactive
+# devcontainer shell carries the whole set (the rc autoload), so a case that
+# means "this credential is absent" must clear every name, not just the
+# canonical one: find_credential resolves aliases (Z_AI_API_KEY,
+# GITHUB_MCP_PAT, ...), and an ambient alias silently wins over the .env.local
+# value under test - the suite then fails in exactly the container it ships in
+# while passing on a bare CI runner.
+MANAGED_CREDENTIALS=(
+    ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY
+    GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT GITHUB_MCP_PAT
+    UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
+)
+scrub_credentials() { unset "${MANAGED_CREDENTIALS[@]}"; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKENDS="${SCRIPT_DIR}/../../../.devcontainer/ai-backends.sh"
 WORK="$(mktemp -d)"
@@ -106,6 +120,21 @@ assert_contains() {
     assert "${label}" grep -q -- "${pattern}" "${file}"
 }
 
+echo "== scrub-list parity: every emit_export name is scrubbed, and only those =="
+# A credential or alias added to print_env_exports without landing in
+# MANAGED_CREDENTIALS (or the reverse) would re-open the ambient-leak hole.
+env_export_names="$(sed -n 's/^    emit_export //p' "${BACKENDS}" | tr -s ' ' '\n' | sort -u)"
+while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    printf '%s\n' "${MANAGED_CREDENTIALS[@]}" | grep -Fxq "${name}" \
+        || bad "emit_export name ${name} is missing from MANAGED_CREDENTIALS"
+done <<<"${env_export_names}"
+for name in "${MANAGED_CREDENTIALS[@]}"; do
+    grep -Fxq "${name}" <<<"${env_export_names}" \
+        || bad "scrub-list name ${name} is not an emit_export name"
+done
+ok "scrub list matches the emit_export set"
+
 echo "== codex-zai: profile, model, and key forwarding =="
 out="${WORK}/codex-env.txt"
 ZAI_API_KEY="test-key-codex" record "${out}" codex-zai --model glm-5.3
@@ -120,7 +149,7 @@ assert_not_contains "${out}" '^ZHIPU_API_KEY=' "codex-zai removes the native Ope
 echo "== codex-zai: Z_AI_API_KEY alias and reasoning override =="
 out="${WORK}/codex-alias.txt"
 (
-    unset ZAI_API_KEY
+    scrub_credentials
     Z_AI_API_KEY="alias-key" CODEX_ZAI_REASONING_EFFORT=low record "${out}" codex-zai
 )
 assert_contains "${out}" '^ZAI_API_KEY=alias-key$' "Z_AI_API_KEY alias is honored"
@@ -131,7 +160,7 @@ mkdir -p "${WORK}/zai-envroot"
 printf '# comment\nZ_AI_API_KEY="zai-key-from-envfile"\n' > "${WORK}/zai-envroot/.env.local"
 out="${WORK}/codex-zai-envfile.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     record "${out}" codex-zai
 )
@@ -141,7 +170,7 @@ assert_contains "${out}" '^ZAI_API_KEY=zai-key-from-envfile$' \
 printf '  Z_AI_API_KEY = "zai-spaced-key"  \n' > "${WORK}/zai-envroot/.env.local"
 out="${WORK}/codex-zai-spaced-envfile.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     record "${out}" codex-zai
 )
@@ -151,7 +180,7 @@ assert_contains "${out}" '^ZAI_API_KEY=zai-spaced-key$' \
 printf 'ZAI_API_KEY=zai-file-key\n' > "${WORK}/zai-envroot/.env.local"
 out="${WORK}/codex-zai-envfile2.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     record "${out}" codex-zai
 )
@@ -160,7 +189,7 @@ assert_contains "${out}" '^ZAI_API_KEY=zai-file-key$' ".env.local ZAI_API_KEY is
 printf '\357\273\277ZAI_API_KEY=zai-bom-key\n' > "${WORK}/zai-envroot/.env.local"
 out="${WORK}/codex-zai-bom-envfile.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     record "${out}" codex-zai
 )
@@ -179,6 +208,7 @@ assert_contains "${out}" '^ZAI_API_KEY=env-wins$' "environment beats .env.local"
 
 out="${WORK}/codex-zai-empty-env.txt"
 (
+    scrub_credentials
     export ZAI_API_KEY=""
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     record "${out}" codex-zai
@@ -191,7 +221,8 @@ cp "${BACKENDS}" "${WORK}/defroot/.devcontainer/ai-backends.sh"
 printf 'ZAI_API_KEY=default-root-key\n' > "${WORK}/defroot/.env.local"
 out="${WORK}/codex-zai-defroot.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY AI_BACKENDS_REPO_ROOT
+    scrub_credentials
+    unset AI_BACKENDS_REPO_ROOT
     FAKE_CLI_OUT="${out}" PATH="${SANDBOX_PATH}" CODEX_HOME="${WORK}/codex-home" \
         "${WORK}/defroot/.devcontainer/ai-backends.sh" codex-zai >/dev/null 2>&1
 )
@@ -254,7 +285,7 @@ mkdir -p "${scrub_root}"
 printf 'ZAI_API_KEY=zai-scrub-key\n' > "${scrub_root}/.env.local"
 out="${WORK}/codex-scrub-env.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${scrub_root}"
     export DXT_WORKSPACE_ROOT="${scrub_root}"
     export BASH_ENV="${SCRIPT_DIR}/../../../.devcontainer/env-autoload.sh"
@@ -274,7 +305,7 @@ assert_contains "${child_out}" '^BASH_ENV=/dev/null$' "codex child uses a no-op 
 echo "== claude-zai: .env.local fallback =="
 out="${WORK}/claude-zai-envfile.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     PATH="${SANDBOX_PATH}" CODEX_HOME="${WORK}/codex-home" \
         CLAUDE_ZAI_CONFIG_DIR="${WORK}/claude-zai-home2" \
@@ -428,7 +459,7 @@ out="${WORK}/codex-or-envfile.txt"
 mkdir -p "${WORK}/envroot"
 printf '# comment\nOPENROUTER_API_KEY="or-key-from-envfile"\n' > "${WORK}/envroot/.env.local"
 (
-    unset OPENROUTER_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/envroot"
     record "${out}" codex-openrouter
 )
@@ -496,9 +527,7 @@ printf 'ZAI_API_KEY=zai-file-key\nGITHUB_PERSONAL_ACCESS_TOKEN="gh-token-file"\n
     > "${WORK}/zai-envroot/.env.local"
 out="${WORK}/env-exports.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY \
-        GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT \
-        UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     "${BACKENDS}" env
 ) >"${out}" 2>/dev/null
@@ -514,9 +543,7 @@ assert_contains "${out}" "^export UNITY_PROJECT_PATH='/unity/path'\$" "env expor
 echo "== env: unset keys are omitted and output evaluates cleanly =="
 out="${WORK}/env-eval.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY \
-        GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT \
-        UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/empty-root"
     export ZAI_API_KEY="env-only-zai"
     "${BACKENDS}" env
@@ -531,7 +558,7 @@ assert_not_contains "${out}" 'UNITY' "env omits unset Unity values"
 echo "== env: environment precedence over .env.local =="
 out="${WORK}/env-precedence.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY
+    scrub_credentials
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
     export ZAI_API_KEY="env-zai-wins"
     "${BACKENDS}" env
@@ -546,9 +573,7 @@ cp "${BACKENDS}" "${WORK}/autoload-root/.devcontainer/ai-backends.sh"
 printf 'ZAI_API_KEY=zai-file-key\nOPENROUTER_API_KEY=or-file-key\n' > "${WORK}/autoload-root/.env.local"
 out="${WORK}/autoload-env.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY \
-        GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT \
-        UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
+    scrub_credentials
     DXT_WORKSPACE_ROOT="${WORK}/autoload-root" \
         bash -c '. "$1"; env | LC_ALL=C sort' _ "${AUTOLOAD}" >"${out}"
 )
@@ -559,9 +584,7 @@ assert_not_contains "${out}" '^DXT_WORKSPACE_ROOT=' "autoload unsets its own plu
 
 out="${WORK}/autoload-disabled.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY \
-        GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT \
-        UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
+    scrub_credentials
     DXT_ENV_AUTOLOAD_DISABLED=1 DXT_WORKSPACE_ROOT="${WORK}/autoload-root" \
         bash -c '. "$1"; printf "%s\\n" "${ZAI_API_KEY-UNSET}"' _ "${AUTOLOAD}" >"${out}" 2>&1
 )
@@ -578,7 +601,7 @@ assert_contains "${out}" '^env-wins$' "autoload keeps environment precedence"
 
 out="${WORK}/autoload-noop.txt"
 (
-    unset ZAI_API_KEY
+    scrub_credentials
     DXT_WORKSPACE_ROOT="${WORK}/missing-root" \
         bash -c '. "$1"; printf "exit=%s zai=%s\n" "$?" "${ZAI_API_KEY-UNSET}"' _ "${AUTOLOAD}" >"${out}" 2>&1
 )

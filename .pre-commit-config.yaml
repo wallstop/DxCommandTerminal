@@ -196,9 +196,9 @@ repos:
           (npm --prefix tooling~ run lint:md:fix) for the rewrite.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
-        entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1
+        entry: uv run --project tooling~ python tooling~/scripts/lint_llm_instructions.py
         language: system
-        files: (^\.llm/)|(AGENTS\.md$)|(CLAUDE\.md$)|(^\.cursorrules$)|(^\.github/copilot-instructions\.md$)|(tooling~/scripts/(lint-llm-instructions|generate-skills-index)\.ps1$)|(tooling~/scripts/(lint_llm_instructions|generate_skills_index)\.py$)|(tooling~/pyproject\.toml$)
+        files: (^\.llm/)|(AGENTS\.md$)|(CLAUDE\.md$)|(^\.cursorrules$)|(^\.github/copilot-instructions\.md$)|(tooling~/scripts/(lint_llm_instructions|generate_skills_index)\.py$)|(tooling~/pyproject\.toml$)
         pass_filenames: false
         stages:
           - pre-commit
@@ -209,9 +209,9 @@ repos:
           structure, and front-end pointer-file delegation to .llm/context.md.
       - id: llm-skill-sizes
         name: Enforce .llm line limits (300 hard, 270 critical)
-        entry: pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1
+        entry: uv run --project tooling~ python tooling~/scripts/lint_skill_sizes.py
         language: system
-        files: (^\.llm/)|(tooling~/scripts/lint-skill-sizes\.ps1$)|(tooling~/scripts/lint_skill_sizes\.py$)|(tooling~/pyproject\.toml$)
+        files: (^\.llm/)|(tooling~/scripts/lint_skill_sizes\.py$)|(tooling~/pyproject\.toml$)
         pass_filenames: false
         stages:
           - pre-commit
@@ -219,11 +219,10 @@ repos:
         description: >
           Keeps authored LLM context minimal: every authored file under .llm/ must stay at or
           below 300 lines (270+ is a critical warning); the generated skills index is exempt.
-          Implemented by lint_skill_sizes.py (typed python under uv, issue #220 stage 1); this
-          ps1 entry is the delegator so the hook keeps its command.
+          Implemented by lint_skill_sizes.py (typed python under uv, issue #220).
       - id: unity-meta-lint
         name: Lint Unity .meta hygiene (orphans, missing metas, guid uniqueness)
-        entry: pwsh -NoProfile -File tooling~/scripts/lint-unity-meta.ps1
+        entry: uv run --project tooling~ python tooling~/scripts/lint_unity_meta.py
         language: system
         always_run: true
         pass_filenames: false
@@ -234,5 +233,4 @@ repos:
           Validates Unity .meta hygiene over tracked files: every .meta has its target
           tracked (no orphan metas for gitignored/generated data), every Unity-visible
           file/directory has a tracked .meta, and every meta declares a unique 32-hex guid.
-          Implemented by lint_unity_meta.py (typed python under uv, issue #220 stage 2); this
-          ps1 entry is the delegator so the hook keeps its command.
+          Implemented by lint_unity_meta.py (typed python under uv, issue #220).

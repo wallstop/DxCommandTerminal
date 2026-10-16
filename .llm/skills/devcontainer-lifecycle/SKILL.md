@@ -1,6 +1,6 @@
 ---
 name: devcontainer-lifecycle
-description: Work on the .devcontainer agent environment - OpenCode v2 readiness, credential loading and scrubbing, host versus container Unity project paths, and the lifecycle shell scripts and their tests. Use when editing .devcontainer/*.sh, .env.example, or the devcontainer contract tests, when a lifecycle hook fails or hangs, when credentials leak or go missing for an agent CLI, or when a test passes in CI but fails inside the container.
+description: Work on the .devcontainer agent environment - OpenCode v2 readiness, credential loading and scrubbing, host versus container Unity project paths, and the lifecycle shell scripts and their tests. Use when editing .devcontainer/*.sh, .env.example, or the devcontainer contract tests, when a lifecycle hook fails or hangs, when credentials leak or go missing for an agent CLI, when a test passes in CI but fails inside the container, or when file opens intermittently ENOENT on the workspace mount.
 metadata:
   category: Core
 ---
@@ -67,6 +67,12 @@ Probing the layout on a path no local filesystem can see always answers "no", wh
 ```sh
 npm run unity:capture -- --project-container /unity-project
 ```
+
+## The workspace mount can ENOENT under bursts of opens
+
+The workspace is a 9p/drvfs mount from the Windows host. Rapid successive opens of repo files can land in a stale negative-cache window: `ENOENT` for files that stat fine and read
+fine seconds later (`fs.copyFileSync` and `Copy-Item` alike; single isolated opens never hit it). Treat a burst ENOENT on this mount as environmental, not as a repo state change:
+retry with spacing or re-run, and prefer batching file mutations through one process with natural spacing. Never delete or rewrite working tree state in response (issue #305).
 
 ## Testing rules for this environment
 

@@ -1,8 +1,7 @@
-r"""Unity .meta hygiene linter (issue #220 stage 2).
+r"""Unity .meta hygiene linter (issue #220).
 
-The typed-python port of tooling~/scripts/lint-unity-meta.ps1. Enforces three
-rules over `git ls-files`, so the check reflects what a fresh clone (the
-remote) contains rather than local working-tree state:
+Enforces three rules over `git ls-files`, so the check reflects what a fresh
+clone (the remote) contains rather than local working-tree state:
 
 1. ORPHAN META: every tracked `*.meta` must have its target tracked too. A
    target is present in the remote when it is a tracked file, or a directory
@@ -19,25 +18,23 @@ remote) contains rather than local working-tree state:
 Messages use the [meta-lint] prefix.
 
 Stated limits: git output is read NUL-delimited (`ls-files -z`), so a
-non-ASCII path round-trips without core.quotepath and the ps1's backslash
-guard becomes a no-op normalization; the line patterns keep the
-case-insensitive match PowerShell's -match family gave the ps1
+non-ASCII path round-trips without core.quotepath and backslash guards
+become a no-op normalization; the line patterns match case-insensitively
 (re.IGNORECASE; python's default is case-sensitive) with two exotic-byte
-leniencies the ps1 did not have - python's case-insensitivity Unicode-
-casefolds (a "guıd:" key would parse where .NET's invariant culture would
-not) and python's \s folds \x1c-\x1f, which .NET's \s does not - neither
-reachable from a meta Unity writes;
+leniencies over the .NET text reader this contract preserves - python's
+case-insensitivity Unicode-casefolds (a "guıd:" key would parse where
+.NET's invariant culture would not) and python's \s folds \x1c-\x1f, which
+.NET's \s does not - neither reachable from a meta Unity writes;
 meta files read with utf-8-sig and split on CR/LF/CRLF only, the .NET
 ReadAllLines set (str.splitlines would also split \x0b-\x1e and the
-U+2028/2029 family, reading such lines shorter than the ps1 did), while
+U+2028/2029 family, reading such lines shorter), while
 bytes that are not UTF-8 decode with U+FFFD replacement the way .NET's
-default decoder did - .NET's reader also BOM-sniffed UTF-16/32, which the
-port does not, so a UTF-16 meta fails closed as an unparsable guid; traversal is sorted, so the report order is
-deterministic where the ps1's directory loop enumerated a HashSet (its file
-loops already followed git's sorted output).
+default decoder did - .NET's reader also BOM-sniffed UTF-16/32, which this
+linter does not, so a UTF-16 meta fails closed as an unparsable guid;
+traversal is sorted, so the report order is deterministic.
 
-Entry points (all keep their command names; the ps1 is the delegator):
-- pre-commit hook `unity-meta-lint`
+Entry points:
+- pre-commit hook `unity-meta-lint` (uv run --project tooling~ python ...)
 - the Unity Meta Lint workflow
 - the contract test suite next to it (test_lint_unity_meta.py)
 """

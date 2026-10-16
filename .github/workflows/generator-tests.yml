@@ -12,9 +12,7 @@ on:
       - "Runtime/Attributes/RegisterCommandAttribute.cs"
       - "Runtime/CommandTerminal/Backend/CommandArg.cs"
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
-      - "tooling~/scripts/verify-analyzer-payload.ps1"
       - "tooling~/scripts/verify_analyzer_payload.py"
-      - "tooling~/scripts/python-runner.ps1"
       - "tooling~/scripts/tests/test_verify_analyzer_payload.py"
       - "tooling~/pyproject.toml"
       - ".github/workflows/generator-tests.yml"
@@ -27,9 +25,7 @@ on:
       - "Runtime/Attributes/RegisterCommandAttribute.cs"
       - "Runtime/CommandTerminal/Backend/CommandArg.cs"
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
-      - "tooling~/scripts/verify-analyzer-payload.ps1"
       - "tooling~/scripts/verify_analyzer_payload.py"
-      - "tooling~/scripts/python-runner.ps1"
       - "tooling~/scripts/tests/test_verify_analyzer_payload.py"
       - "tooling~/pyproject.toml"
       - ".github/workflows/generator-tests.yml"
@@ -128,10 +124,10 @@ jobs:
           uv run --project tooling~ python -m unittest discover -s tooling~/scripts/tests -p test_verify_analyzer_payload.py -v 2>&1 | tee "$GENERATOR_DIAGNOSTICS/payload-verifier-tests.log"
 
       - name: Verify shipped analyzer payload and two-checkout reproducibility
-        shell: pwsh
+        shell: bash
         run: |
-          ./tooling~/scripts/verify-analyzer-payload.ps1 -TwoCheckout *>&1 | Tee-Object -FilePath "$env:GENERATOR_DIAGNOSTICS/payload-reproducibility.log"
-          exit $LASTEXITCODE
+          set -o pipefail
+          uv run --project tooling~ python tooling~/scripts/verify_analyzer_payload.py --two-checkout 2>&1 | tee "$GENERATOR_DIAGNOSTICS/payload-reproducibility.log"
 
       - name: Retain test runtime configuration
         if: always()

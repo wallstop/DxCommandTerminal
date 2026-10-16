@@ -1,6 +1,6 @@
-"""Red-green tests for tooling~/scripts/lint_unity_meta.py (issue #220 stage 2).
+"""Red-green tests for tooling~/scripts/lint_unity_meta.py (issue #220).
 
-The meta linter's first contract suite (the ps1 had none). Builds fixture
+The meta linter's contract suite. Builds fixture
 roots with files on disk and synthetic `git ls-files` listings injected, so
 every rule runs in-process without spawning git; the git path and the CLI
 surface (including default root discovery) use isolated staged repositories.
@@ -137,8 +137,7 @@ class OrphanMetaTests(MetaFixture):
         )
 
     def test_folder_asset_lines_gate_the_file_target_rule(self) -> None:
-        # The line value is case-insensitive (the ps1's -match family) and the
-        # match is anchored: a value other than "yes" or an indented line is
+        # The line value is case-insensitive and the match is anchored: a value other than "yes" or an indented line is
         # not a folder-asset line, so a file target stays legal.
         for index, (line, expect_ok) in enumerate(
             (
@@ -317,7 +316,7 @@ class DiscoveryTests(MetaFixture):
             self.assertEqual(exit_code, 0, "the staged tree is the remote")
             self.assertIn("Unity meta hygiene passed", stream.getvalue())
 
-    def test_git_failure_fails_with_the_ps1_message(self) -> None:
+    def test_git_failure_fails_with_the_controlled_message(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             stream = io.StringIO()
             exit_code = lint_unity_meta.lint_unity_meta(Path(temporary), stream=stream)
@@ -326,9 +325,8 @@ class DiscoveryTests(MetaFixture):
             self.assertIn("a git repository?", stream.getvalue())
 
     def test_missing_repo_root_reports_the_git_failure_message(self) -> None:
-        # A --repo-root that does not exist used to surface as a raw
-        # FileNotFoundError traceback from the git spawn; the ps1 answered
-        # with the controlled message, and so does the port.
+        # A --repo-root that does not exist answers with the controlled
+        # message, never a raw FileNotFoundError traceback from the git spawn.
         stream = io.StringIO()
         exit_code = lint_unity_meta.lint_unity_meta(self.root / "missing", stream=stream)
         self.assertEqual(exit_code, 1)
@@ -337,10 +335,10 @@ class DiscoveryTests(MetaFixture):
 
 
 class CliTests(unittest.TestCase):
-    def test_cli_flags_match_the_ps1_surface(self) -> None:
+    def test_cli_flag_surface(self) -> None:
         """The pre-commit hook and CI call the CLI, not the module; pin the
-        argument names the delegator forwards. The CLI discovery path is the
-        git one, so the fixture is a staged repo like a real checkout."""
+        argument names they invoke. The CLI discovery path is the git one,
+        so the fixture is a staged repo like a real checkout."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
@@ -407,7 +405,7 @@ class InvalidPathTests(unittest.TestCase):
     def test_cli_reports_a_non_utf8_path_instead_of_crashing(self) -> None:
         """A tracked filename whose bytes are not UTF-8 decodes with
         surrogates; printing it must not lose the report to a
-        UnicodeEncodeError traceback (the ps1 printed it lossily)."""
+        UnicodeEncodeError traceback."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
