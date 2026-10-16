@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const workflow = fs.readFileSync(fileURLToPath(new URL("../../../.github/workflows/generator-tests.yml", import.meta.url)), "utf8");
+const workflow = fs.readFileSync(fileURLToPath(new URL("../../../.github/workflows/generator-tests.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 function step(name) {
     const start = workflow.indexOf(`      - name: ${name}\n`);
     assert.notEqual(start, -1, `missing step: ${name}`);
