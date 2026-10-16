@@ -18,7 +18,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List
 
 REPO_ROOT = Path(__file__).parents[3]
 DEVCONTAINER = REPO_ROOT / ".devcontainer" / "devcontainer.json"
