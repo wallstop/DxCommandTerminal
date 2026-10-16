@@ -9,10 +9,11 @@ metadata:
 
 ## Toolchain
 
-| Tool            | Source                      | Command                            |
-| --------------- | --------------------------- | ---------------------------------- |
-| CSharpier 1.1.2 | `.config/dotnet-tools.json` | `dotnet tool run csharpier format` |
-| pre-commit      | `.pre-commit-config.yaml`   | `pre-commit run --all-files`       |
+| Tool            | Source                      | Command                                                                          |
+| --------------- | --------------------------- | -------------------------------------------------------------------------------- |
+| CSharpier 1.1.2 | `.config/dotnet-tools.json` | `dotnet tool run csharpier format`                                               |
+| pre-commit      | `.pre-commit-config.yaml`   | `pre-commit run --all-files`                                                     |
+| uv              | `tooling~/pyproject.toml`   | `uv run --project tooling~ python ...` (the python linter hooks hard-require it) |
 
 Restore tools first (`dotnet tool restore`) - the `dotnet-tool-restore` pre-commit hook runs it on every commit and fails fast when tools are missing.
 

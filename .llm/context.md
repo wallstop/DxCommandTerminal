@@ -46,9 +46,9 @@ Tests/Runtime/ Tests/Editor/          # PlayMode + EditMode test assemblies (...
 Media/                                # Screenshots and demo GIFs
 tooling~/                             # Unity-hidden tooling (tilde-suffixed; not shipped in the UPM artifact)
   package.json                        # npm manifest (devDependencies; root package.json delegates via --prefix)
-  scripts/                            # Repo tooling (PowerShell + Node)
+  scripts/                            # Repo tooling (Node + Python + bash)
     mcp/                              # unity-mcp.mjs: Unity MCP bridge/probe/configure/capture + tests
-    tests/                            # Script regression suites (pwsh + bash)
+    tests/                            # Script regression suites (node --test + uv unittest + bash)
 .devcontainer/                        # VS Code devcontainer (Dockerfile, lifecycle, Z.AI launchers)
 ```
 

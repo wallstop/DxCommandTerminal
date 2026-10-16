@@ -146,8 +146,8 @@ More overrides: `OPENROUTER_API_TIMEOUT_MS`, `CLAUDE_OPENROUTER_CONFIG_DIR`, `CL
 
 ## Caches and mounts
 
-The container uses `tooling~/.venv-container-linux` for uv. PowerShell launchers also separate environments by host/container, OS, and architecture. Set `UV_PROJECT_ENVIRONMENT` to
-use an explicit path; launchers and container setup preserve this override.
+The container uses `tooling~/.venv-container-linux` for uv, so container and host environments stay separate. On a native host, `uv run --project tooling~` shares one
+`tooling~/.venv` across host platforms - delete it when switching host OS. Set `UV_PROJECT_ENVIRONMENT` to use an explicit path; container setup preserves this override.
 
 Deterministic named volumes survive full rebuilds: NuGet, dotnet tools, PowerShell modules, pip, npm cache, and the Linux `node_modules` tree. The enclosing Unity project is
 bind-mounted read-write and consistent at `/unity-project`, so agents can inspect host code and capture tooling can be installed into `Assets/Editor`. It is excluded from workspace

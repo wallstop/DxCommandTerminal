@@ -198,8 +198,10 @@ test("workflow path filters include repository execution inputs", () => {
       "tooling~/scripts/tests/fixtures/valid-skill.md"
     ], `${event} must include the fixture without triggering on unrelated Node tests`);
   }
+  const loop = 'unittest discover -s tooling~/scripts/tests -p "$suite" -v';
+  assert.strictEqual(llm.split(loop).length - 1, 1, "the suites run through one loop");
   for (const suite of ["test_lint_llm_instructions", "test_lint_skill_sizes", "test_lint_unity_meta", "test_generate_skills_index"]) {
-    assert.strictEqual(llm.split(`${suite}.py`).length - 1, 1, `${suite} must run once`);
+    assert.strictEqual(llm.split(` ${suite}.py`).length - 1, 1, `${suite} must be listed once`);
   }
   assert.doesNotMatch(llm, /test-llm-instructions-lint\.ps1/, "the typed-python suites run directly");
 });
