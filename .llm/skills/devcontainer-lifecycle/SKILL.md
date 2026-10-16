@@ -8,7 +8,7 @@ metadata:
 # Devcontainer Lifecycle and Credential Handling
 
 The devcontainer is the agent environment for this repository. Its scripts run as VS Code lifecycle hooks, so a bug here breaks every developer, not the package. Full reference:
-`.devcontainer/README.md`. Contract test: `tooling~/scripts/tests/test-devcontainer.sh`.
+`.devcontainer/README.md`. Contract test: `tooling~/scripts/tests/test_devcontainer.py`.
 
 ## The container deliberately exports credentials
 
@@ -76,7 +76,7 @@ retry with spacing or re-run, and prefer batching file mutations through one pro
 
 ## Testing rules for this environment
 
-The container is the hostile case, not the clean one. `test-devcontainer.sh` scrubs credentials, `BASH_ENV`, and the loader's own `DXT_*` control variables, because an ambient
+The container is the hostile case, not the clean one. `test_devcontainer.py` scrubs credentials, `BASH_ENV`, and the loader's own `DXT_*` control variables, because an ambient
 value changes what the lifecycle does. Keep that list complete when adding a new control variable, and forward test-only flags explicitly instead of scrubbing them.
 
 - Keep stubs on a PATH without the host's real CLIs; a leaked `opencode2` makes the verifier fail for a reason the test did not intend.

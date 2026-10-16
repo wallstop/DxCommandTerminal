@@ -164,6 +164,6 @@ and verifies the image the first time, in CI.
 ```bash
 npm test                                   # node --test tooling~/scripts/mcp/__tests__
 bash tooling~/scripts/tests/test-ai-backends.sh     # Z.AI launcher regression suite
-bash tooling~/scripts/tests/test-devcontainer.sh   # OpenCode v2 build contract
+python3 -m unittest discover -s tooling~/scripts/tests -p test_devcontainer.py   # OpenCode v2 build contract
 npm run unity:mcp:probe                    # host editor readiness (bridge running)
 ```

@@ -98,6 +98,7 @@ export const NODE_TEST_SPLITS = {
 
 /** The default gate set. Names are stable identifiers used by --skip. */
 export function buildChecks() {
+  const pythonCommand = process.platform === "win32" ? "python" : "python3";
   const nodeTestsCheck = (name, cachePaths, extra = {}) => ({
     name,
     command: `node --test ${NODE_TEST_SPLITS[name].map((file) => `"${file}"`).join(" ")}`,
@@ -216,24 +217,47 @@ export function buildChecks() {
     {
       /*
           The player-tooling python suites CI runs in tooling-tests.yml,
-          in CI's order. Not cached: the suites build their own fixture
-          trees and finish in seconds, so a key saves nothing worth its
-          staleness. Local selection mirrors the CI steps so a tooling
-          change fails here first, not in a pushed branch's CI run.
-
-          One interpreter for all four suites (CI keeps one discover step
-          each): measured 4.1 s -> 1.0 s standalone here, more saved under
-          preflight's parallel load. unittest aggregates the module list
-          without failing between suites, and any suite failure still
-          fails the gate's exit code. The cwd option hosts the suites'
+          in CI's order. One interpreter for all four suites (CI keeps one
+          discover step each): measured 4.1 s -> 1.0 s standalone here, more
+          saved under preflight's parallel load. unittest aggregates the
+          module list without failing between suites, and any suite failure
+          still fails the gate's exit code. The cwd option hosts the suites'
           own directory; a shell `cd` would make this gate the only one
           parsing a tilde path through cmd.exe on Windows.
+
+          Cached: the suite files (the whole tests directory - worst case a
+          new suite file re-runs this gate, a stale pass is the hazard that
+          matters), the modules they exercise (.devcontainer for the OpenCode
+          verifier, tooling~/scripts/t13 for the player tooling), and the
+          python runtime join the key. Everything else the suites touch is a
+          temp fixture they build themselves, and the ambient PATH folds in
+          through the runtime environment the way it does for every cached
+          gate (the delegator-style resolutions happen inside the suite).
        */
       name: "python-tests",
-      cache: false,
-      startBeforeCache: true,
       cwd: "tooling~/scripts/tests",
-      command: `${process.platform === "win32" ? "python" : "python3"} -m unittest test_verify_opencode test_player_smoke test_player_readiness test_webgl_player`
+      command: `${pythonCommand} -m unittest test_verify_opencode test_player_smoke test_player_readiness test_webgl_player`,
+      cachePython: true,
+      cacheRuntimeEnvironment: true,
+      cachePaths: [".devcontainer", "tooling~/scripts/t13", "tooling~/scripts/tests"]
+    },
+    {
+      /*
+          CI's ubuntu-only devcontainer contract step: the typed port of the
+          retired test-devcontainer.sh (issue #220). The suite drives the
+          real .devcontainer lifecycle scripts through /bin/bash with
+          stubbed CLIs, so it skips itself on Windows exactly where CI
+          gates the step to one leg. Keys: the whole .devcontainer
+          directory (every script and baked config the suite reads or
+          copies), the suite file, bash, and the python runtime.
+       */
+      name: "devcontainer-contract",
+      cwd: "tooling~/scripts/tests",
+      command: `${pythonCommand} -m unittest test_devcontainer`,
+      cachePython: true,
+      cacheBash: true,
+      cacheRuntimeEnvironment: true,
+      cachePaths: [".devcontainer", "tooling~/scripts/tests/test_devcontainer.py"]
     },
     {
       name: "t11-check",
