@@ -34,17 +34,18 @@ def warn(message: str) -> None:
 
 
 def run(command: list[str], timeout: float | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    # A timed-out or unlaunchable command reads as a failed attempt, the way
+    # the timeout(1) calls this port replaced did.
+    try:
+        return subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
 
 
 def command_version(command_name: str) -> str:
     if command_name not in KNOWN_VERSION_COMMANDS:
         return ""
-    try:
-        result = run([command_name, "--version"], timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    match = VERSION_PATTERN.search(result.stdout)
+    match = VERSION_PATTERN.search(run([command_name, "--version"], timeout=10).stdout)
     return match.group(0) if match else ""
 
 
@@ -57,18 +58,17 @@ def version_sort_key(version: str) -> tuple[int, ...]:
 def resolve_latest_version(package_spec: str) -> str:
     # An empty range or a null answer must read as "no answer" so the caller
     # keeps the installed CLI instead of failing on the string "null".
-    try:
-        result = run(["npm", "view", package_spec, "version", "--json"], timeout=20)
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
+    result = run(["npm", "view", package_spec, "version", "--json"], timeout=20)
     if result.returncode != 0:
+        # npm writes its payload only on success; anything else reads as
+        # "no answer" too.
         return ""
     try:
         payload = json.loads(result.stdout)
     except ValueError:
         return ""
     if isinstance(payload, list):
-        entries = payload
+        entries = [entry for entry in payload if isinstance(entry, str)]
     elif isinstance(payload, str):
         entries = [payload]
     else:
@@ -76,10 +76,12 @@ def resolve_latest_version(package_spec: str) -> str:
     if not entries:
         return ""
     best = entries[0]
+    # jq's max_by keeps the last of tied entries, so a prerelease string must
+    # not shadow a later distinct value that collapses to the same key.
     for entry in entries[1:]:
-        if version_sort_key(entry) > version_sort_key(best):
+        if version_sort_key(entry) >= version_sort_key(best):
             best = entry
-    return "".join(str(best).split())
+    return "".join(best.split())
 
 
 def npm_prefix() -> Path:
@@ -183,6 +185,8 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
+    except KeyboardInterrupt:
+        raise SystemExit(130)
     except OSError as error:
         print(f"[agent-clis] ERROR: {error}", file=sys.stderr)
         raise SystemExit(1)

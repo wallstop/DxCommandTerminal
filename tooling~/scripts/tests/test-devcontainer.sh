@@ -109,18 +109,23 @@ sys.stdout.write(module.resolve_latest_version("@opencode/cli@2"))'
 [[ "$(resolve_version '"2.0.16"')" == "2.0.16" ]] \
     || fail "the resolver did not pass a single version through"
 
-# The tracked entry point must still run the refresh through its delegator. An
-# empty registry answer with no installed CLIs fails closed without any sleep.
+# The tracked entry point must still run the refresh through its delegator.
+# The PATH holds only the delegation directory: a python3 symlink serves the
+# delegator, the stub's /bin/bash shebang needs nothing else, and no real CLI
+# can leak a different answer. An empty registry with no installed CLIs fails
+# closed with every refresh counted (four packages plus the OpenCode v2 gate).
 mkdir -p "${WORK_DIR}/delegation" "${WORK_DIR}/home"
 cat >"${WORK_DIR}/delegation/npm" <<'EOF'
-#!/usr/bin/env bash
+#!/bin/bash
 exit 0
 EOF
 chmod +x "${WORK_DIR}/delegation/npm"
-if PATH="${WORK_DIR}/delegation:/usr/bin:/bin" HOME="${WORK_DIR}/home" TMPDIR="${WORK_DIR}" \
-    bash "${INSTALLER}" >/dev/null 2>&1; then
-    fail "the delegator exited zero with an empty registry and no installed CLIs"
-fi
+ln -sf "$(command -v python3)" "${WORK_DIR}/delegation/python3"
+ln -sf "$(command -v dirname)" "${WORK_DIR}/delegation/dirname"
+delegation_out="$(PATH="${WORK_DIR}/delegation" HOME="${WORK_DIR}/home" TMPDIR="${WORK_DIR}" \
+    NPM_CONFIG_PREFIX= /bin/bash "${INSTALLER}" 2>&1 || true)"
+grep -Fq "5 agent CLI refresh(es) failed" <<<"${delegation_out}" \
+    || fail "the delegator did not run the installer to its failure summary: ${delegation_out}"
 assert_contains "${DOCKERFILE}" 'WORKDIR /workspaces/package'
 assert_contains "${DOCKERFILE}" 'COPY .devcontainer/verify-opencode.sh /tmp/verify-opencode.sh'
 assert_count "${DOCKERFILE}" 'bash /tmp/verify-opencode.sh' 2

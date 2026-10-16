@@ -70,6 +70,8 @@ class ResolverTests(unittest.TestCase):
             ('"  2.0.16\\n"', "2.0.16"),
             ('["2.0.16-beta","2.0.15"]', "2.0.15"),
             ('["2.1","2.1.0"]', "2.1.0"),
+            ('["2.1.0-rc.1","2.1.0-rc.2"]', "2.1.0-rc.2"),
+            ('["2.0.16", null]', "2.0.16"),
         ]
         for payload, expected in cases:
             with self.subTest(payload=payload):
@@ -83,7 +85,8 @@ class ResolverTests(unittest.TestCase):
     def test_failed_and_unlaunchable_npm_read_as_empty(self) -> None:
         self.assertEqual(self.resolved('["2.0.16"]', returncode=1), "")
         for failure in (OSError("cannot launch"), subprocess.TimeoutExpired("npm", 20)):
-            with self.subTest(failure=failure), mock.patch.object(installer, "run", side_effect=failure):
+            with self.subTest(failure=failure), \
+                    mock.patch.object(installer.subprocess, "run", side_effect=failure):
                 self.assertEqual(installer.resolve_latest_version("@opencode/cli@2"), "")
 
     def test_sort_key_matches_registry_semantics(self) -> None:
@@ -113,7 +116,8 @@ class CommandVersionTests(unittest.TestCase):
             with self.subTest(stdout=result.stdout), mock.patch.object(installer, "run", return_value=result):
                 self.assertEqual(installer.command_version("opencode"), "")
         for failure in (OSError("missing"), subprocess.TimeoutExpired("opencode", 10)):
-            with self.subTest(failure=failure), mock.patch.object(installer, "run", side_effect=failure):
+            with self.subTest(failure=failure), \
+                    mock.patch.object(installer.subprocess, "run", side_effect=failure):
                 self.assertEqual(installer.command_version("opencode"), "")
         self.assertEqual(installer.command_version("bogus"), "")
 
@@ -197,6 +201,21 @@ class RefreshFlowTests(unittest.TestCase):
             self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 6])
             self.assertEqual(len(self.calls()), 3)
 
+    def test_timed_out_install_still_retries(self) -> None:
+        # A hung npm must read as one failed attempt, not abort the refresh.
+        real_run = subprocess.run
+
+        def hang_on_install(command, **kwargs):
+            if command[1] == "install":
+                raise subprocess.TimeoutExpired(command, kwargs.get("timeout") or 0)
+            return real_run(command, **kwargs)
+
+        with mock.patch.object(installer.subprocess, "run", side_effect=hang_on_install):
+            with self.refresh({"DXT_FAKE_NPM_VIEW": '"2.2.0"'}) as (status, out, err, sleep):
+                self.assertEqual(status, 1)
+                self.assertEqual(err.count("install attempt"), 3)
+                self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 6])
+
     def test_install_that_reports_the_wrong_version_fails(self) -> None:
         env = {"DXT_FAKE_NPM_VIEW": '"2.2.0"', "DXT_FAKE_NPM_INSTALL_CMD": "codex",
                "DXT_FAKE_NPM_INSTALL_VERSION": "2.0.9"}
@@ -251,6 +270,7 @@ class RefreshFlowTests(unittest.TestCase):
             with self.refresh({}) as (status, out, err, _):
                 self.assertEqual(status, 0)
                 self.assertIn("another agent CLI refresh is already running.", out)
+                self.assertEqual(self.calls(), [])
             fcntl.flock(held.fileno(), fcntl.LOCK_UN)
 
     def test_full_refresh_reports_every_current_cli(self) -> None:
