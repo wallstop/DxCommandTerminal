@@ -16,7 +16,8 @@ lines, `HEAD~1`, curated path lists - each miss a whole class of real changes. H
 
 ### The repo snapshot (`repositorySnapshot`, tooling~/scripts/preflight-cache.mjs)
 
-Backs `cacheTrackedFiles: true` (node-tests, lint-md-format) - checks that read files outside their declared roots. It folds, in order:
+Available through `cacheTrackedFiles: true` for checks that read files outside their declared roots. Contract tests retain this snapshot behavior. The default Node suite always
+runs because external PowerShell/Python inputs are opaque. The snapshot folds, in order:
 
 1. The status output (`status --porcelain=v1 -z --untracked-files=all`).
 2. The tracked index listing: `path\0blob\0eol\0` per file, from the same memoized `ls-files -s` the path identity uses.

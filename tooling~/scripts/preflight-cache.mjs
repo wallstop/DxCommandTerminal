@@ -1003,6 +1003,9 @@ function readRegularFile(filePath) {
 }
 
 export function isCacheableCheck(check) {
+  if (check.cache === false) {
+    return false;
+  }
   if (check.cacheRuntimeEnvironment === true && (process.env.NODE_OPTIONS || process.env.NODE_PATH)) {
     return false;
   }

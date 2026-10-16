@@ -1,30 +1,11 @@
 /*
-    Parallel local preflight: one command that runs every Unity-free gate the
-    repo enforces on a normal change, concurrently.
+    Runs all Unity-free local gates concurrently. Commands match CI without
+    npm wrapper startup. Successful checks cache their declared inputs;
+    external-runtime integration tests always run.
 
-    Why: an agent (or human) validating an edit today serially runs the node
-    suite, the C# linters, the baseline gate, the package gate, and the docs
-    loop. Each pays its own startup, and the wall time is the SUM (~25-30s).
-    Run concurrently, the wall time is the slowest single check (~5s) and one
-    command replaces the list.
-
-    Checks (all Unity-free): each command runs the same script CI runs,
-    called directly - the `npm --prefix` wrapper adds a startup per check
-    and preflight spawns every check at once, so the wrapper is what CI's
-    npm-script steps keep and preflight drops.
-
-      - node suite, t11 baseline gate, package content gate, docs guides build,
-        compat compile tripwire
-      - the ten C#/asset linters (mirrors the pre-commit fleet + CI)
-
-    Usage:
-      node tooling~/scripts/preflight.mjs [--skip=name1,name2] [--no-cache]
-
-    Exit codes: 0 = all checks passed, 1 = at least one failed (or the check
-    set resolved empty, or --skip named an unknown check).
-
-    Windows note: every command runs through the shell, so npm.cmd / dotnet
-    shims resolve the same way they do in CI.
+    Usage: node tooling~/scripts/preflight.mjs [--skip=name1,name2] [--no-cache]
+    Exit 1 on a failed check, an empty selection, or an unknown skip name.
+    Shell commands resolve Windows shims the same way CI does.
 */
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -65,46 +46,12 @@ export function buildChecks() {
       name: "node-tests",
       command:
         'node --test "tooling~/scripts/mcp/__tests__/*.test.mjs" "tooling~/scripts/tests/*.test.mjs"',
-      cacheTrackedFiles: true,
-      cacheNpm: true,
-      cacheGit: true,
-      cacheTar: true,
-      cacheGzip: true,
-      cacheDependencies: true,
-      cacheRuntimeEnvironment: true,
-      cacheEnvironment: ["BASH_ENV"],
-      cacheBash: true,
-      cacheNpmConfig: true,
-      cacheGitConfig: true,
-      cachePaths: [
-        "Runtime",
-        "Editor",
-        "Packs",
-        "Styles",
-        "Fonts",
-        "Samples~",
-        "Tests",
-        "Generator~",
-        "Documentation~",
-        "tooling~/scripts",
-        "tooling~/package.json",
-        "tooling~/docs/build.mjs",
-        "tooling~/docs/docfx.json",
-        "tooling~/docs/refs.csproj",
-        "tooling~/docs/toc.yml",
-        "Tests/Runtime/Capture/Baselines~",
-        "tooling~/docs/obj/api",
-        ".config/dotnet-tools.json"
-      ],
-      cacheExcludes: [
-        "tooling~/scripts/.preflight-cache",
-        "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/obj",
-        "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/bin",
-        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/obj",
-        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/bin",
-        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/obj",
-        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/bin"
-      ]
+      /*
+          External PowerShell/Python configuration prevents safe cache reuse.
+          Fixtures stay outside other gates' inputs, so keying can overlap.
+       */
+      cache: false,
+      startBeforeCache: true
     },
     {
       name: "t11-check",
@@ -489,9 +436,28 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
   const cachedResults = [];
   const pending = [];
   const cacheKeys = new Map();
+  const earlyChecks = useCache
+    ? selected.filter((check) => check.startBeforeCache === true && !isCacheableCheck(check))
+    : [];
+  const onSettled = (result) => {
+    const seconds = (result.durationMs / 1000).toFixed(1);
+    if (result.ok) {
+      const key = cacheKeys.get(result.name);
+      if (key !== undefined && useCache) {
+        writeCacheEntry(selected.find((check) => check.name === result.name), key);
+      }
+      console.log(`[preflight] ok   ${result.name} (${seconds}s)`);
+    } else {
+      console.log(`[preflight] FAIL ${result.name} (${seconds}s)`);
+    }
+  };
+  if (earlyChecks.length > 0) {
+    console.log(`[preflight] running ${earlyChecks.length} checks while checking caches...`);
+  }
+  const earlyResults = runChecks(earlyChecks, { onSettled });
   let cacheContext = null;
   let keyComputer = null;
-  if (useCache) {
+  if (useCache && earlyChecks.length < selected.length) {
     try {
       cacheContext = createCacheContext();
       keyComputer = createCacheKeyComputer();
@@ -500,6 +466,9 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
     }
   }
   for (const check of selected) {
+    if (earlyChecks.includes(check)) {
+      continue;
+    }
     let key = null;
     if (useCache && isCacheableCheck(check)) {
       try {
@@ -517,22 +486,9 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
     }
   }
 
-  console.log(`[preflight] running ${pending.length} checks in parallel...`);
-  const settled = await runChecks(pending, {
-    onSettled: (result) => {
-      const seconds = (result.durationMs / 1000).toFixed(1);
-      if (result.ok) {
-        const key = cacheKeys.get(result.name);
-        if (key !== undefined && useCache) {
-          writeCacheEntry({ name: result.name, command: result.command }, key);
-        }
-        console.log(`[preflight] ok   ${result.name} (${seconds}s)`);
-      } else {
-        console.log(`[preflight] FAIL ${result.name} (${seconds}s)`);
-      }
-    }
-  });
-  const results = [...cachedResults, ...settled];
+  console.log(`[preflight] running ${pending.length} ${earlyChecks.length > 0 ? "additional " : ""}checks in parallel...`);
+  const groups = await Promise.all([earlyResults, runChecks(pending, { onSettled })]);
+  const results = [...cachedResults, ...groups.flat()];
 
   const failures = results.filter((result) => !result.ok);
   for (const failure of failures) {
