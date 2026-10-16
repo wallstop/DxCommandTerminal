@@ -74,13 +74,14 @@ function scratchRepo() {
   fs.writeFileSync(path.join(root, ".gitignore"), ".preflight-cache/\nignored-scratch/\n");
   fs.writeFileSync(path.join(root, ".gitattributes"), "*.txt text eol=lf\n");
   fs.writeFileSync(path.join(scripts, "tracked-fixture.txt"), "tracked bytes\n");
-  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
+  /* Command-local settings avoid global config and separate setup processes. */
+  const git = (...args) => execFileSync("git", [
+    "-c", "user.email=probe@example.invalid",
+    "-c", "user.name=preflight probe",
+    "-c", "commit.gpgsign=false",
+    ...args
+  ], { cwd: root, encoding: "utf8" });
   git("init", "-q", "-b", "main");
-  git("config", "user.email", "probe@example.invalid");
-  git("config", "user.name", "preflight probe");
-  /* Repo-local: a developer machine with commit.gpgsign=true must not fail
-     the fixture commit (--no-verify skips hooks, not signing). */
-  git("config", "commit.gpgsign", "false");
   git("add", "-A");
   git("commit", "-q", "--no-verify", "-m", "scratch fixture");
   const scratchScripts = "tooling~/scripts";

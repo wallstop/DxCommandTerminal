@@ -60,7 +60,8 @@ enforces one, join that class to the filter in the same change - `publish-releas
 
 Drive a SCRATCH repository, never the real checkout. The preflight-cache module derives REPO_ROOT from its own location, so a test copies `preflight-cache.mjs` into a three-file
 repo under `os.tmpdir()` and runs every key observation in a child that imports the copy - the scratch tree becomes the keyed repository, git spawns cost milliseconds on the local
-scratch filesystem instead of seconds on the 9p mount, and a probe can never touch real tracked state. Commit identity is repo-local `git config` inside the scratch repo.
+scratch filesystem instead of seconds on the 9p mount, and a probe can never touch real tracked state. The scratch Git wrapper passes command-local identity and signing settings
+with `-c`; it never changes global config.
 
 The real-branch era is the cautionary record: the committed-probe test once committed on the real branch and `reset --hard` in `finally`, so it had to refuse dirty trees (computed
 from `git status --porcelain --untracked-files=no` at registration) because the reset destroys uncommitted work - and it ate its own fix once in its birth session. If a future test
