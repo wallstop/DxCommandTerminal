@@ -238,7 +238,12 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   assert.equal(pythonTests.cache, undefined, "python-tests keys its suite and module bytes");
   assert.equal(pythonTests.startBeforeCache, undefined, "python-tests keys before running");
   assert.equal(pythonTests.cachePython, true, "the suites run under the resolved python");
-  assert.deepEqual(pythonTests.cachePaths, [".devcontainer", "tooling~/scripts/t13", "tooling~/scripts/tests"]);
+  assert.deepEqual(pythonTests.cachePaths, [
+    ".devcontainer",
+    "tooling~/scripts/t13",
+    "tooling~/scripts/tests",
+    "tooling~/compat/player-smoke"
+  ]);
   const devcontainerContract = checks.find((check) => check.name === "devcontainer-contract");
   assert.equal(devcontainerContract.cachePython, true);
   assert.equal(devcontainerContract.cacheBash, true, "the devcontainer suite drives bash scripts");

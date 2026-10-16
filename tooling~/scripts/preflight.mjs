@@ -228,18 +228,26 @@ export function buildChecks() {
           Cached: the suite files (the whole tests directory - worst case a
           new suite file re-runs this gate, a stale pass is the hazard that
           matters), the modules they exercise (.devcontainer for the OpenCode
-          verifier, tooling~/scripts/t13 for the player tooling), and the
-          python runtime join the key. Everything else the suites touch is a
-          temp fixture they build themselves, and the ambient PATH folds in
-          through the runtime environment the way it does for every cached
-          gate (the delegator-style resolutions happen inside the suite).
+          verifier, tooling~/scripts/t13 for the player tooling, the
+          tooling~/compat/player-smoke fixture sources the player suites
+          install through install_fixtures), and the python runtime join the
+          key. Everything else the suites touch is a temp fixture they build
+          themselves, and the ambient PATH folds in through the runtime
+          environment the way it does for every cached gate (the
+          delegator-style resolutions happen inside the suite). Stated
+          limits: only tooling~/compat/player-smoke is keyed, not all of
+          tooling~/compat - the sibling obj/bin trees are build outputs the
+          suites never read; and the player suites' no-repo-read property
+          for run_leg rests on their subprocess mocks, so a suite change
+          that un-mocks a git-backed helper needs its read surface re-
+          proven before this key can trust it again.
        */
       name: "python-tests",
       cwd: "tooling~/scripts/tests",
       command: `${pythonCommand} -m unittest test_verify_opencode test_player_smoke test_player_readiness test_webgl_player`,
       cachePython: true,
       cacheRuntimeEnvironment: true,
-      cachePaths: [".devcontainer", "tooling~/scripts/t13", "tooling~/scripts/tests"]
+      cachePaths: [".devcontainer", "tooling~/scripts/t13", "tooling~/scripts/tests", "tooling~/compat/player-smoke"]
     },
     {
       /*
