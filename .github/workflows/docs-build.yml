@@ -14,6 +14,7 @@ on:
       - master
       - main
     paths:
+      - "global.json"
       - "Documentation~/**"
       - "Samples~/**"
       - "Runtime/**"
@@ -29,6 +30,7 @@ on:
       - ".github/workflows/docs-build.yml"
   pull_request:
     paths:
+      - "global.json"
       - "Documentation~/**"
       - "Samples~/**"
       - "Runtime/**"
@@ -69,13 +71,13 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.306
+          global-json-file: global.json
 
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-docs-${{ hashFiles('tooling~/docs/refs.csproj', '.config/dotnet-tools.json') }}
+          key: ${{ runner.os }}-nuget-docs-${{ hashFiles('global.json', 'tooling~/docs/refs.csproj', '.config/dotnet-tools.json') }}
           restore-keys: ${{ runner.os }}-nuget-docs-
 
       - name: Build the docs site

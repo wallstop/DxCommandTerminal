@@ -39,7 +39,15 @@ def payload_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def require_sdk_pin(repo_root: Path) -> Path:
+    pin = repo_root / "global.json"
+    if not pin.is_file():
+        raise ValueError(f"SDK pin not found: {pin}")
+    return pin
+
+
 def build_payload(project: Path, output: Path, repo_root: Path) -> Path:
+    require_sdk_pin(repo_root)
     command = ["dotnet", "build", str(project), "-c", "Release", "--nologo", "--no-incremental", f"/p:AnalyzerPayloadOutputDir={output}"]
     if subprocess.run(command, cwd=repo_root, check=False).returncode != 0:
         raise ValueError(f"rebuilding {project} into {output} failed")
@@ -64,9 +72,9 @@ def compare_shipped(payload: Payload, repo_root: Path, built: Path) -> None:
 
 def extract_checkouts(repo_root: Path, directory: Path) -> tuple[Path, Path]:
     archive = directory / "generator.tar"
-    command = ["git", "archive", "--format=tar", f"--output={archive}", "HEAD", "Generator~"]
+    command = ["git", "archive", "--format=tar", f"--output={archive}", "HEAD", "global.json", "Generator~"]
     if subprocess.run(command, cwd=repo_root, check=False).returncode != 0:
-        raise ValueError("git archive of Generator~ failed")
+        raise ValueError(f"git archive of global.json and Generator~ from {repo_root} failed")
     roots = (directory / "checkout-a", directory / "checkout-b")
     with tarfile.open(archive) as source:
         members = source.getmembers()
@@ -89,10 +97,12 @@ def extract_checkouts(repo_root: Path, directory: Path) -> tuple[Path, Path]:
                 with content, target.open("wb") as output:
                     shutil.copyfileobj(content, output)
                 target.chmod(member.mode)
+            require_sdk_pin(root)
     return roots
 
 
 def verify(repo_root: Path, two_checkout: bool) -> None:
+    require_sdk_pin(repo_root)
     for payload in PAYLOADS:
         project = repo_root / payload.project
         if not project.is_file():
@@ -116,7 +126,7 @@ def verify(repo_root: Path, two_checkout: bool) -> None:
                 project = root / payload.project
                 if not project.is_file():
                     raise ValueError(f"extracted checkout is missing a payload project: {project}")
-                hashes[(root.name, payload.dll)] = payload_hash(build_payload(project, output, repo_root))
+                hashes[(root.name, payload.dll)] = payload_hash(build_payload(project, output, root))
         for payload in PAYLOADS:
             first, second = (hashes[(root.name, payload.dll)] for root in roots)
             if first != second:

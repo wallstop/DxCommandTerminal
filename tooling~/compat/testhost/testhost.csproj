@@ -30,8 +30,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
-    <!-- The CI runner pins SDK 9.0.306; a local SDK 10+ runs the host on
-         its own runtime through this roll-forward. -->
+    <!-- SDK selection and runtime availability are separate; a host
+         without runtime 9 can use an installed newer runtime. -->
     <RollForward>LatestMajor</RollForward>
     <LangVersion>9.0</LangVersion>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>

@@ -57,10 +57,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get autoremove -y
 
 # ------------------------------------------------------------------------------
-# .NET 10 SDK side-by-side (required by the C# Dev Kit extension). The base
-# image's 9.0 SDK stays primary for the repo's CSharpier tool manifest.
+# Install the repository SDK even when the base image advances. Keep .NET 10
+# side-by-side for the C# Dev Kit extension.
 # ------------------------------------------------------------------------------
-RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+RUN --mount=type=bind,source=global.json,target=/tmp/dxt-global.json,readonly \
+    curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+    && repo_sdk_version="$(jq -er '.sdk.version' /tmp/dxt-global.json)" \
+    && bash /tmp/dotnet-install.sh --version "$repo_sdk_version" --install-dir /usr/share/dotnet \
     && bash /tmp/dotnet-install.sh --channel 10.0 --install-dir /usr/share/dotnet \
     && rm /tmp/dotnet-install.sh
 

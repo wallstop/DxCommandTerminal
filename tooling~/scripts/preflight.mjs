@@ -165,6 +165,7 @@ export function buildChecks() {
       cacheDotnetTool: true,
       cacheDocsApi: true,
       cachePaths: [
+        "global.json",
         "Documentation~",
         "Samples~/TerminalCommands",
         "Tests/Runtime/Capture/Baselines~",
@@ -207,6 +208,7 @@ export function buildChecks() {
       cacheDotnet: true,
       cacheRuntimeEnvironment: true,
       cachePaths: [
+        "global.json",
         "Runtime",
         "tooling~/package.json",
         "tooling~/compat/runtime-2021.3.csproj"
@@ -246,6 +248,7 @@ export function buildChecks() {
       cacheDotnet: true,
       cacheRuntimeEnvironment: true,
       cachePaths: [
+        "global.json",
         "Runtime",
         "Tests/Editor",
         "tooling~/compat/tests"
@@ -264,6 +267,7 @@ export function buildChecks() {
       cacheDotnet: true,
       cacheRuntimeEnvironment: true,
       cachePaths: [
+        "global.json",
         "Runtime",
         "Tests/Editor",
         "Generator~",

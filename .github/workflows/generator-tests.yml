@@ -6,6 +6,7 @@ on:
       - master
       - main
     paths:
+      - "global.json"
       - "Generator~/**"
       - "Runtime/Analyzers/**"
       - "Runtime/Attributes/RegisterCommandAttribute.cs"
@@ -20,6 +21,7 @@ on:
       - ".gitattributes"
   pull_request:
     paths:
+      - "global.json"
       - "Generator~/**"
       - "Runtime/Analyzers/**"
       - "Runtime/Attributes/RegisterCommandAttribute.cs"
@@ -56,20 +58,20 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # NuGet restore is shared across tests and payload builds. Keyed on the
-      # projects, so a PackageReference change invalidates the cache.
+      # SDK and projects, so either change invalidates the cache.
       - name: Cache NuGet packages
         id: nuget-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('Generator~/**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'Generator~/**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
       - name: Setup DotNet
         id: dotnet
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.306
+          global-json-file: global.json
 
       - name: Record runner diagnostics
         if: always()
@@ -86,7 +88,9 @@ jobs:
             printf 'runner_os=%s\nrunner_arch=%s\n' "$RUNNER_OS" "$RUNNER_ARCH"
             printf 'event_sha=%s\ncheckout_revision=' "$GITHUB_SHA"
             git rev-parse HEAD || true
-            printf 'nuget_cache_hit=%s\ndotnet_setup_outcome=%s\nrequested_sdk=9.0.306\n' "$NUGET_CACHE_HIT" "$DOTNET_SETUP_OUTCOME"
+            printf 'nuget_cache_hit=%s\ndotnet_setup_outcome=%s\n' "$NUGET_CACHE_HIT" "$DOTNET_SETUP_OUTCOME"
+            printf 'requested_sdk='
+            python3 -c 'import json; print(json.load(open("global.json"))["sdk"]["version"])' || printf '<unavailable>\n'
             awk -F ': ' '/^model name/ { print "cpu_model=" $2; found=1; exit } END { if (!found) print "cpu_model=<unavailable>" }' /proc/cpuinfo
             printf 'logical_cpus='; getconf _NPROCESSORS_ONLN
             printf 'available_cpus='; nproc
