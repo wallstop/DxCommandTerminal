@@ -472,12 +472,13 @@ function repositorySnapshot() {
 
       Status encodes an untracked file as a bare `?? <path>` line, so an
       edit to an untracked file's CONTENT leaves the output byte-identical
-      while the check inputs move - and node-tests reads files outside its
-      declared roots (.github/, .devcontainer/, .llm/), where a draft file
-      would age a cached pass. The same holds for a DIRTY tracked file
-      outside those roots: a second rewrite keeps the ` M <path>` line
-      byte-identical while the content moves again. So every file status
-      flags as changed - untracked or tracked - is hashed by content: the
+      while the check inputs move - and a snapshot-keyed check may read
+      files outside any declared root (.github/, .devcontainer/, .llm/),
+      where a draft file would age a cached pass. The same holds for a
+      DIRTY tracked file outside those roots: a second rewrite keeps the
+      ` M <path>` line byte-identical while the content moves again. So
+      every file status flags as changed - untracked or tracked - is
+      hashed by content: the
       hash is incremental over raw bytes (a UTF-8 string join would decode
       two different binary files to the same replacement-character
       string), and a file above the size cap hashes its stat signature
@@ -775,6 +776,8 @@ export function createCacheContext() {
   lazy(context, "npmExecutable", () => npmExecutableState(npm));
   lazy(context, "dotnet", () => commandVersion("dotnet", ["--version"]));
   lazy(context, "dotnetExecutable", () => resolvedExecutableState("dotnet"));
+  lazy(context, "uv", () => commandVersion("uv", ["--version"]));
+  lazy(context, "uvExecutable", () => resolvedExecutableState("uv"));
   lazy(context, "git", () => commandVersion("git", ["--version"]));
   lazy(context, "gitExecutable", () => resolvedExecutableState("git"));
   lazy(context, "tar", () => commandVersion("tar", ["--version"]));
@@ -920,6 +923,8 @@ function buildCacheKey(check, context, sources) {
     `npm-executable=${check.cacheNpm === true ? context.npmExecutable ?? "" : ""}`,
     `dotnet=${check.cacheDotnet === true ? context.dotnet : ""}`,
     `dotnet-executable=${check.cacheDotnet === true ? context.dotnetExecutable ?? "" : ""}`,
+    `uv=${check.cacheUv === true ? context.uv ?? "" : ""}`,
+    `uv-executable=${check.cacheUv === true ? context.uvExecutable ?? "" : ""}`,
     `git=${check.cacheGit === true ? context.git : ""}`,
     `git-executable=${check.cacheGit === true ? context.gitExecutable ?? "" : ""}`,
     `tar=${check.cacheTar === true ? context.tar : ""}`,

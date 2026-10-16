@@ -50,7 +50,9 @@ Restore tools first (`dotnet tool restore`) - the `dotnet-tool-restore` pre-comm
 - `cachePaths` walks the real filesystem. Include ignored files when the command can read them. Do not derive its contents from `git ls-files`.
 - A change outside a check's declared inputs may reuse its cache. A change inside one must invalidate it.
 - Hash installed dependency and tool contents, not only lockfiles or version strings. Disable caching when an opaque external input cannot be fingerprinted.
-- Keep `node-tests` uncached: its PowerShell/Python integrations read external runtimes and configuration. Preserve the full command and test coverage.
+- The node suite runs as two cached gates (`node-tests-tooling`, `node-tests-csharp`) with per-file input enumeration (#307): assign each new suite file to the gate whose key spans
+  its read surface, and put a file whose inputs reach outside `tooling~` in `node-tests-csharp` - worst case it re-runs, and a stale pass is the hazard that matters. `python-tests`
+  stays uncached: its suites read external uv/python configuration.
 - Opt into `startBeforeCache` only when fixture writes stay outside every other gate's inputs; cache-ineligible checks otherwise wait for keying.
 - Environment inputs are per check. Key raw values, path contents, and effective config files only when the child command reads them.
 - Add a contract test for every new input category. Cover content changes, ignored files, missing paths, generated symlinks, dependencies, tools, and config.
