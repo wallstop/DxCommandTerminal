@@ -223,6 +223,11 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   assert.deepEqual(toolingCheck.cachePaths, ["tooling~", ".github/workflows", ".llm"]);
   assert.equal(toolingCheck.cacheUv, true, "python-entries resolves the linters through uv");
   assert.equal(toolingCheck.cacheBash, true, "workflow snippets execute through bash");
+  assert.equal(
+    toolingCheck.cacheDependencies,
+    true,
+    "mcp members load the SDK from tooling~/node_modules"
+  );
   assert.equal(csharpCheck.cacheUv, undefined, "no tree-keyed member spawns uv");
   assert.deepEqual(csharpCheck.cachePaths, [
     "Runtime",
@@ -1016,10 +1021,11 @@ test("a staged rewrite moves the snapshot key where the status line stays identi
       Thread-two class: an index-only change (`A `) contributes its
       status line and nothing else, and a later staged rewrite of the
       same path produces the byte-identical line again - so the snapshot
-      must fold the staged content, or node-tests reads a file outside
-      its declared roots through a cached pass from before the rewrite.
-      The probe is a dot-file at the scratch root; the whole repository
-      is the suite's temp directory, so a crash leaves nothing behind.
+      must fold the staged content, or a snapshot-keyed check reads a
+      file outside its declared roots through a cached pass from before
+      the rewrite. The probe is a dot-file at the scratch root; the
+      whole repository is the suite's temp directory, so a crash leaves
+      nothing behind.
    */
   const repo = scratchRepo();
   const probeRelative = ".dxct-snapshot-probe.tmp";

@@ -73,9 +73,9 @@ export const NODE_TEST_SPLITS = {
       the repo root down (Media/ and progress/ included), and
       preflight.test reads .config and tooling~/compat. Keys: every walked
       root plus the tooling~ scripts and fixtures those members import.
-      Stated coin: a NEW repo-root loose file named exactly like an
-      analyzer payload (the stray hunt's only root-level input class)
-      defeats the key until the next keyed edit.
+      Stated coin: a NEW repo-root entry the stray hunt walks - a loose
+      file named exactly like an analyzer payload, or a whole new
+      root-level directory - defeats the key until the next keyed edit.
    */
   "node-tests-csharp": [
     "tooling~/scripts/tests/analyzer-placement.test.mjs",
@@ -130,13 +130,23 @@ export function buildChecks() {
       ["tooling~", ".github/workflows", ".llm"],
       {
         /*
-            python-entries resolves the typed-python linters through uv, and
-            publish-release/generator-workflow execute workflow snippets
-            through bash - both runtimes join the key the same way npm and
-            git do for the checks that spawn them.
+            python-entries resolves the typed-python linters through uv,
+            and publish-release/generator-workflow execute workflow
+            snippets through bash - both runtimes join the key the same
+            way npm and git do for the checks that spawn them. The mcp
+            tests import unity-mcp.mjs, which loads the MCP SDK from
+            tooling~/node_modules (or the baked /opt/dxt-mcp tree), so
+            the installed dependency bytes join the key too.
+
+            Stated coin: the uv venv (tooling~/.venv, uv.lock - both
+            git-ignored) is keyed only through the uv release here; uv
+            run re-syncs the venv from the tracked pyproject before
+            executing, so a recreated or drifted venv heals at run time
+            instead of moving this key.
          */
         cacheUv: true,
-        cacheBash: true
+        cacheBash: true,
+        cacheDependencies: true
       }
     ),
     nodeTestsCheck("node-tests-csharp", [
