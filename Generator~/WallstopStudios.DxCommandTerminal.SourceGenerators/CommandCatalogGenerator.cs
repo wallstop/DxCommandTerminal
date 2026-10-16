@@ -174,10 +174,16 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             List<CommandModel> commands = new List<CommandModel>();
             HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+            SemanticModel semanticModel = null;
+            INamedTypeSymbol containingType = null;
+            (string DeclaringTypeName, string Display, bool IsUnbound) typeMetadata = default;
             foreach (MethodDeclarationSyntax candidate in receiver.Candidates)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
-                SemanticModel semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
+                if (semanticModel == null || semanticModel.SyntaxTree != candidate.SyntaxTree)
+                {
+                    semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
+                }
                 IMethodSymbol method = semanticModel.GetDeclaredSymbol(candidate, context.CancellationToken);
                 if (method == null)
                 {
@@ -200,12 +206,17 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 {
                     continue;
                 }
-                if (!TryParseAttribute(method, out CommandAttributeData attribute))
+                if (!TryParseAttribute(method, out CommandAttributeData attribute) || !method.IsStatic)
                 {
                     continue;
                 }
 
-                CommandModel model = CommandModelBuilder.Build(method, attribute, commandArgumentType, candidate);
+                if (!SymbolEqualityComparer.Default.Equals(containingType, method.ContainingType))
+                {
+                    containingType = method.ContainingType;
+                    typeMetadata = CommandModelBuilder.BuildContainingTypeMetadata(containingType);
+                }
+                CommandModel model = CommandModelBuilder.Build(method, attribute, commandArgumentType, candidate, typeMetadata);
                 if (model != null)
                 {
                     commands.Add(model);
@@ -370,7 +381,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
     internal static class CommandModelBuilder
     {
-        public static CommandModel Build(IMethodSymbol method, CommandAttributeData attribute, ITypeSymbol commandArgumentType, MethodDeclarationSyntax methodDeclaration)
+        public static CommandModel Build(
+            IMethodSymbol method,
+            CommandAttributeData attribute,
+            ITypeSymbol commandArgumentType,
+            MethodDeclarationSyntax methodDeclaration,
+            (string DeclaringTypeName, string Display, bool IsUnbound) typeMetadata
+        )
         {
             /*
                Legacy discovery walks static methods only (BindingFlags.Static);
@@ -397,12 +414,12 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 Contexts = attribute.Contexts,
                 MethodNameIdentifierDisplay = EscapeIdentifier(method.Name),
                 IsMethodGeneric = method.IsGenericMethod,
-                DeclaringTypeName = BuildDeclaringTypeName(method.ContainingType),
-                ContainingTypeDisplay = BuildContainingTypeDisplay(method.ContainingType, out bool containingTypeIsUnbound),
-                ContainingTypeIsUnbound = containingTypeIsUnbound,
+                DeclaringTypeName = typeMetadata.DeclaringTypeName,
+                ContainingTypeDisplay = typeMetadata.Display,
+                ContainingTypeIsUnbound = typeMetadata.IsUnbound,
             };
 
-            BuildSignature(method, commandArgumentType, containingTypeIsUnbound, model);
+            BuildSignature(method, commandArgumentType, typeMetadata.IsUnbound, model);
 
             /*
                 The symbol accessibility walk cannot see file-local
@@ -433,6 +450,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             return model;
+        }
+
+        public static (string DeclaringTypeName, string Display, bool IsUnbound) BuildContainingTypeMetadata(INamedTypeSymbol containingType)
+        {
+            string declaringTypeName = BuildDeclaringTypeName(containingType);
+            string display = BuildContainingTypeDisplay(containingType, out bool isUnbound);
+            return (declaringTypeName, display, isUnbound);
         }
 
         /*
@@ -611,7 +635,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             bool methodIsOpen = method.IsGenericMethod;
             bool signatureAddressable = !methodIsOpen && !containingTypeIsUnbound;
 
-            List<IParameterSymbol> parameterList = new List<IParameterSymbol>(method.Parameters);
+            ImmutableArray<IParameterSymbol> parameterList = method.Parameters;
 
             /*
                 Validity first, without building any strings: one value
@@ -620,7 +644,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 parameter type CommandArg[]&).
              */
             model.HasValidSignature =
-                signatureAddressable && parameterList.Count == 1 && parameterList[0].RefKind == RefKind.None && IsCommandArgArray(parameterList[0].Type, commandArgumentType);
+                signatureAddressable && parameterList.Length == 1 && parameterList[0].RefKind == RefKind.None && IsCommandArgArray(parameterList[0].Type, commandArgumentType);
 
             model.DirectlyBindable = model.HasValidSignature && method.ReturnsVoid && IsAccessibleFromCatalog(method);
 

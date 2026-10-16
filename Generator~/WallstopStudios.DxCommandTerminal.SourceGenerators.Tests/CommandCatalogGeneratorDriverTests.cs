@@ -1276,6 +1276,98 @@ namespace Fixtures
         }
 
         [Fact]
+        public void CatalogUsesEachTreeAndCurrentCompilationWhenSyntaxTreesAreReused()
+        {
+            const string template =
+                @"
+namespace Fixtures {
+    using Mark = WallstopStudios.DxCommandTerminal.Attributes.RegisterCommandAttribute;
+    using Skip = System.ObsoleteAttribute;
+    using WallstopStudios.DxCommandTerminal.Backend;
+    public static class HOLDER {
+        public static int Calls;
+        [Mark(Name = Values.Prefix + ""HOLDER-A"", Help = Values.Help, MinArgCount = Values.Min, MaxArgCount = Values.Min + 2, Contexts = (CommandExecutionContexts)Values.Contexts)]
+        public static void CommandA(CommandArg[] arguments) { Calls++; }
+        [Mark(Name = Values.Prefix + ""HOLDER-B"", Help = Values.Help, MinArgCount = Values.Min, MaxArgCount = Values.Min + 2, Contexts = (CommandExecutionContexts)Values.Contexts)]
+        public static void CommandB(CommandArg[] arguments) { Calls++; }
+        [Skip] public static void Noise(CommandArg[] arguments) { Calls += 100; }
+    }
+}";
+            const string constants =
+                @"namespace Fixtures { public static class Values { public const string Prefix = ""one-""; public const string Help = ""first""; public const int Min = 1; public const int Contexts = 7; } }";
+            CSharpCompilation baseCompilation = TestCompilationFactory.CreateCompilation("TreeReuseFirst", string.Empty);
+            CSharpParseOptions options = (CSharpParseOptions)baseCompilation.SyntaxTrees.First().Options;
+            SyntaxTree firstTree = CSharpSyntaxTree.ParseText(template.Replace("HOLDER", "First", StringComparison.Ordinal), options, path: "Commands.cs");
+            string secondSource = template
+                .Replace("HOLDER", "Second", StringComparison.Ordinal)
+                .Replace("using Mark = WallstopStudios.DxCommandTerminal.Attributes.RegisterCommandAttribute;", "using Mark = System.ObsoleteAttribute;", StringComparison.Ordinal)
+                .Replace("[Mark(", "[global::WallstopStudios.DxCommandTerminal.Attributes.RegisterCommand(", StringComparison.Ordinal)
+                .Replace("[Skip]", "[Mark]", StringComparison.Ordinal);
+            SyntaxTree secondTree = CSharpSyntaxTree.ParseText(secondSource, options, path: "Commands.cs");
+            SyntaxTree firstConstants = CSharpSyntaxTree.ParseText(constants, options, path: "Values.cs");
+            SyntaxTree secondConstants = CSharpSyntaxTree.ParseText(
+                constants
+                    .Replace("one-", "two-", StringComparison.Ordinal)
+                    .Replace("first", "second", StringComparison.Ordinal)
+                    .Replace("= 1", "= 3", StringComparison.Ordinal)
+                    .Replace("= 7", "= -17", StringComparison.Ordinal),
+                options,
+                path: "Values.cs"
+            );
+            CSharpCompilation firstCompilation = baseCompilation.AddSyntaxTrees(firstConstants, firstTree, secondTree);
+            CSharpCompilation secondCompilation = firstCompilation
+                .ReplaceSyntaxTree(firstConstants, secondConstants)
+                .RemoveSyntaxTrees(firstTree, secondTree)
+                .AddSyntaxTrees(secondTree, firstTree)
+                .WithAssemblyName("TreeReuseSecond");
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(new CommandCatalogGenerator());
+            for (int version = 0; version < 2; version++)
+            {
+                driver = driver.RunGeneratorsAndUpdateCompilation(
+                    version == 0 ? firstCompilation : secondCompilation,
+                    out Compilation output,
+                    out ImmutableArray<Diagnostic> diagnostics
+                );
+                Assert.Empty(diagnostics);
+                Assert.Empty(driver.GetRunResult().Diagnostics);
+                Assembly assembly = TestCompilationFactory.CompileAndLoad((CSharpCompilation)output);
+                CatalogView catalog = CatalogView.Load(assembly);
+                CatalogView repeated = CatalogView.Load(assembly);
+                Assert.Equal(4, catalog.Entries.Count);
+                Assert.Equal(4, repeated.Entries.Count);
+                string prefix = version == 0 ? "one-" : "two-";
+                int minimum = version == 0 ? 1 : 3;
+                object[] arguments = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
+                for (int index = 0; index < catalog.Entries.Count; index++)
+                {
+                    bool firstHolder = index < 2;
+                    string holder = firstHolder ? "First" : "Second";
+                    string suffix = index % 2 == 0 ? "A" : "B";
+                    string expectedName = prefix + holder + "-" + suffix;
+                    object entry = Assert.Single(catalog.Entries, candidate => string.Equals(expectedName, catalog.NameOf(candidate), StringComparison.Ordinal));
+                    object repeatedEntry = Assert.Single(repeated.Entries, candidate => string.Equals(expectedName, repeated.NameOf(candidate), StringComparison.Ordinal));
+                    Assert.Same(entry, repeatedEntry);
+                    Assert.Equal(expectedName, catalog.NameOf(entry));
+                    Assert.Equal("Command" + suffix, catalog.MethodNameOf(entry));
+                    Assert.Equal(version == 0 ? "first" : "second", catalog.HelpOf(entry));
+                    Assert.Equal(minimum, catalog.MinArgCountOf(entry));
+                    Assert.Equal(minimum + 2, catalog.MaxArgCountOf(entry));
+                    Assert.Equal(version == 0 ? 7 : -17, catalog.ContextsOf(entry));
+                    Assert.Equal("Fixtures." + holder, catalog.DeclaringTypeNameOf(entry));
+                    (object first, object second) = catalog.GetHandlerPairOf(entry);
+                    Assert.Same(first, second);
+                    Delegate handler = (Delegate)first;
+                    Assert.Null(handler.Target);
+                    Assert.Equal("Command" + suffix, handler.Method.Name);
+                    Assert.Equal("Fixtures." + holder, handler.Method.DeclaringType.FullName);
+                    handler.DynamicInvoke(arguments);
+                }
+                Assert.Equal(2, (int)assembly.GetType("Fixtures.First").GetField("Calls").GetValue(null));
+                Assert.Equal(2, (int)assembly.GetType("Fixtures.Second").GetField("Calls").GetValue(null));
+            }
+        }
+
+        [Fact]
         public void EntryOrderMatchesDeclarationOrder()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
