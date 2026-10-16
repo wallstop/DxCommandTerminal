@@ -72,7 +72,7 @@ Restore tools first (`dotnet tool restore`) - the `dotnet-tool-restore` pre-comm
     - `out-param-discipline` (assign each `out` value on every return path; no `:fix`)
     - `exception-tostring` (a Debug.Log-family call logs the exception itself, never `.Message`; no `:fix`)
     - `theme-palette-tokens` (USS theme tokens + palette fallbacks)
-4. LLM-context linters: `lint-llm-instructions.ps1`, `lint-skill-sizes.ps1` (see [manage-skills](../manage-skills/SKILL.md))
+4. LLM-context linters: `lint_llm_instructions.py`, `lint_skill_sizes.py` (see [manage-skills](../manage-skills/SKILL.md))
 
 Hook scoping rule: repo-wide linters run on `files:` patterns that match their input domain (a staged change outside the domain cannot change the verdict), and CI runs every linter
 unconditionally as the backstop. Do not add `always_run` back to a scoped hook - the whole-repo scan on every commit was ~25 s of commit tax, paid again at pre-push (PR #216).

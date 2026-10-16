@@ -1,6 +1,6 @@
 ---
 name: manage-skills
-description: Create, edit, or remove agentic skills (.llm/skills/*/SKILL.md), regenerate the skills index, or fix lint failures around SKILL.md frontmatter, line limits, or pointer-file delegation. Use when adding new skills, changing skill descriptions/categories, touching .llm/**, or when tooling~/scripts/lint-llm-instructions.ps1 or lint-skill-sizes.ps1 fail.
+description: Create, edit, or remove agentic skills (.llm/skills/*/SKILL.md), regenerate the skills index, or fix lint failures around SKILL.md frontmatter, line limits, or pointer-file delegation. Use when adding new skills, changing skill descriptions/categories, touching .llm/**, or when tooling~/scripts/lint_llm_instructions.py or lint_skill_sizes.py fail.
 metadata:
   category: Core
 ---
@@ -16,28 +16,28 @@ metadata:
     index.md                     # GENERATED - never hand-edit
     <skill-name>/SKILL.md        # One directory per skill (agentskills.io format)
 tooling~/scripts/
-  generate-skills-index.ps1      # Index generator (deterministic)
-  lint-llm-instructions.ps1      # Delegates to lint_llm_instructions.py; -Fix repairs the index
-  lint-skill-sizes.ps1           # Line-limit linter (delegates to lint_skill_sizes.py, typed python)
+  generate_skills_index.py       # Index generator (deterministic; uv run --project tooling~ python ...)
+  lint_llm_instructions.py       # Contract linter; --fix repairs the index
+  lint_skill_sizes.py            # Line-limit linter (typed python)
   tests/                         # Red-green tests for the linters and generator
 ```
 
 ## Creating a skill
 
 1. Create `.llm/skills/<skill-name>/SKILL.md`. The directory name IS the skill name.
-2. Frontmatter rules (enforced by `lint-llm-instructions.ps1`):
+2. Frontmatter rules (enforced by `lint_llm_instructions.py`):
     - `name`: required, `a-z0-9-` only, 1-64 chars, no leading/trailing/double hyphens, and must equal the parent directory name.
     - `description`: required, SINGLE LINE, ASCII-only, 1-1024 chars. Describe what the skill does AND when to use it, with concrete keywords. Non-ASCII (em-dash, smart quotes)
       fails the lint: it is the known cross-OS index-drift vector.
     - `metadata.category`: `Core`, `Performance`, or `Feature` (default `Feature`).
-3. Body: instructions, examples, edge cases. Reference sibling files with relative paths from the skill root. Keep the file at or below 300 lines (`lint-skill-sizes.ps1`, the
-   delegator to `lint_skill_sizes.py`; 270+ warns).
-4. Regenerate the index: `pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1`
+3. Body: instructions, examples, edge cases. Reference sibling files with relative paths from the skill root. Keep the file at or below 300 lines (`lint_skill_sizes.py`; 270+
+   warns).
+4. Regenerate the index: `uv run --project tooling~ python tooling~/scripts/generate_skills_index.py`
 5. Run both linters; commit `.llm/skills/index.md` together with the skill.
 
 ```sh
-pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1 -Fix
-pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1 -VerboseOutput
+uv run --project tooling~ python tooling~/scripts/lint_llm_instructions.py --fix
+uv run --project tooling~ python tooling~/scripts/lint_skill_sizes.py --verbose-output
 ```
 
 ## Editing a skill
@@ -54,7 +54,7 @@ Delete the skill directory and regenerate the index. Check `context.md` and sibl
 - Output is byte-identical across OSes: UTF-8 no BOM, LF endings, ordinal (culture-invariant) sorting, no timestamps. The linter runs the generator twice and byte-compares to catch
   drift.
 - Sections are grouped by category: Core, then Performance, then Feature; each table is sorted ordinally by skill name.
-- If the index is stale, `lint-llm-instructions.ps1 -Fix` repairs it; CI fails without `-Fix`.
+- If the index is stale, `lint_llm_instructions.py --fix` repairs it; CI fails without the repair.
 
 ## Pointer-file contract
 

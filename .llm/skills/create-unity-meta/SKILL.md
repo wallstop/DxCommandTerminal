@@ -48,8 +48,8 @@ TextScriptImporter:
 
 ## Verification
 
-Run `pwsh -NoProfile -File tooling~/scripts/lint-unity-meta.ps1` (also enforced by pre-commit and CI; the implementation is the typed-python `lint_unity_meta.py` next to it, issue
-#220 stage 2, and `test_lint_unity_meta.py` pins this contract). It checks, over tracked files only:
+Run `uv run --project tooling~ python tooling~/scripts/lint_unity_meta.py` (also enforced by pre-commit and CI; `test_lint_unity_meta.py` pins this contract). It checks, over
+tracked files only:
 
 1. Every tracked `.meta` has its target tracked (no orphan metas for gitignored or locally generated data); a folder meta is valid when its directory still contains tracked files.
 2. Every Unity-visible tracked file/directory (no dot-prefixed or `~`-suffixed segment) has a tracked `.meta`, so Unity never auto-generates a stub.

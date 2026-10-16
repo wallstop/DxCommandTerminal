@@ -1,7 +1,6 @@
-"""Red-green tests for tooling~/scripts/lint_skill_sizes.py (issue #220 stage 1).
+"""Red-green tests for tooling~/scripts/lint_skill_sizes.py (issue #220).
 
-The typed-python port of test-lint-skill-sizes.ps1. Builds isolated fixture
-roots and asserts the boundary behavior of the line limits (269 OK / 270
+Builds isolated fixture roots and asserts the boundary behavior of the line limits (269 OK / 270
 critical / 300 at-limit / 301 error), the generated index exemption, recursive
 coverage, the fail-on-critical flag, and the CLI surface.
 
@@ -119,9 +118,9 @@ class SkillSizesBoundaryTests(SkillSizesFixture):
 
 
 class SkillSizesCliTests(unittest.TestCase):
-    def test_cli_flags_match_the_ps1_surface(self) -> None:
+    def test_cli_flag_surface(self) -> None:
         """The pre-commit hook and CI call the CLI, not the module; pin the
-        argument names the delegator forwards."""
+        argument names they invoke."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / ".llm").mkdir()

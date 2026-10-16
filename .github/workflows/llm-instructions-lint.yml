@@ -11,18 +11,10 @@ on:
       - "CLAUDE.md"
       - ".cursorrules"
       - ".github/copilot-instructions.md"
-      - "tooling~/scripts/generate-skills-index.ps1"
-      - "tooling~/scripts/lint-llm-instructions.ps1"
-      - "tooling~/scripts/lint-skill-sizes.ps1"
-      - "tooling~/scripts/python-runner.ps1"
       - "tooling~/**/*.py"
       - ".devcontainer/*.py"
       - "tooling~/pyproject.toml"
       - "tooling~/pyrightconfig.json"
-      - "tooling~/scripts/tests/test-llm-instructions-lint.ps1"
-      - "tooling~/scripts/tests/test-lint-skill-sizes.ps1"
-      - "tooling~/scripts/tests/test-lint-unity-meta.ps1"
-      - "tooling~/scripts/tests/test-generate-skills-index.ps1"
       - "tooling~/scripts/tests/fixtures/valid-skill.md"
       - ".gitattributes"
       - ".github/workflows/llm-instructions-lint.yml"
@@ -33,18 +25,10 @@ on:
       - "CLAUDE.md"
       - ".cursorrules"
       - ".github/copilot-instructions.md"
-      - "tooling~/scripts/generate-skills-index.ps1"
-      - "tooling~/scripts/lint-llm-instructions.ps1"
-      - "tooling~/scripts/lint-skill-sizes.ps1"
-      - "tooling~/scripts/python-runner.ps1"
       - "tooling~/**/*.py"
       - ".devcontainer/*.py"
       - "tooling~/pyproject.toml"
       - "tooling~/pyrightconfig.json"
-      - "tooling~/scripts/tests/test-llm-instructions-lint.ps1"
-      - "tooling~/scripts/tests/test-lint-skill-sizes.ps1"
-      - "tooling~/scripts/tests/test-lint-unity-meta.ps1"
-      - "tooling~/scripts/tests/test-generate-skills-index.ps1"
       - "tooling~/scripts/tests/fixtures/valid-skill.md"
       - ".gitattributes"
       - ".github/workflows/llm-instructions-lint.yml"
@@ -71,14 +55,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The skill-sizes linter runs as typed python under uv (issue #220
-      # stage 1); its delegatee prefers uv and falls back to system python,
-      # so the setup pins the interpreter both legs measure against and
-      # installs the runner uv uses. The pip cache is keyed on the
-      # manifest: the pip install itself only ever fetches the uv wheel
-      # (the linters are stdlib-only, and pyright #256 rides uv, not pip),
-      # and a manifest edit busts the cache the same way it would for a
-      # real dependency.
+      # The linters run as typed python under uv (issue #220); setup pins the
+      # interpreter both legs measure against and installs the runner. The
+      # pip cache is keyed on the manifest: the pip install itself only ever
+      # fetches the uv wheel (the linters are stdlib-only, and pyright #256
+      # rides uv, not pip), and a manifest edit busts the cache the same way
+      # it would for a real dependency.
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -109,29 +91,20 @@ jobs:
         if: runner.os == 'Linux'
         run: uv run --project tooling~ --group typing pyright --project tooling~
 
-      # One pwsh process per phase instead of one per script: pwsh startup
-      # dominates these <1s scripts, worst on Windows. Same scripts, flags,
-      # and order as one step each; LASTEXITCODE is checked explicitly because
-      # native exit codes do not stop a pwsh script. lint-skill-sizes.ps1 is
-      # the delegator to lint_skill_sizes.py. The meta lint keeps its own
-      # workflow; only its typed-python test suite runs here (the python
-      # runner this job pins is the test surface).
+      # Direct typed-python entries (issue #220): the linters run under the
+      # pinned uv interpreter with no pwsh layer. One bash process per phase;
+      # the default `-e` stops on the first non-zero exit. Same scripts,
+      # flags, and order as the ps1 phases they replace. The meta lint keeps
+      # its own workflow; only its typed-python test suite runs here.
       - name: Lint LLM instructions (contract + sizes)
-        shell: pwsh
+        shell: bash
         run: |
-          ./tooling~/scripts/lint-llm-instructions.ps1 -VerboseOutput
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tooling~/scripts/lint-skill-sizes.ps1 -VerboseOutput
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          uv run --project tooling~ python tooling~/scripts/lint_llm_instructions.py --verbose-output
+          uv run --project tooling~ python tooling~/scripts/lint_skill_sizes.py --verbose-output
 
       - name: Test LLM lint, sizes, meta linter, and index generator
-        shell: pwsh
+        shell: bash
         run: |
-          ./tooling~/scripts/tests/test-llm-instructions-lint.ps1 -VerboseOutput
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tooling~/scripts/tests/test-lint-skill-sizes.ps1 -VerboseOutput
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tooling~/scripts/tests/test-lint-unity-meta.ps1 -VerboseOutput
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tooling~/scripts/tests/test-generate-skills-index.ps1 -VerboseOutput
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          for suite in test_lint_llm_instructions.py test_lint_skill_sizes.py test_lint_unity_meta.py test_generate_skills_index.py; do
+            uv run --project tooling~ python -m unittest discover -s tooling~/scripts/tests -p "$suite" -v
+          done

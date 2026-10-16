@@ -191,21 +191,17 @@ test("workflow path filters include repository execution inputs", () => {
     assert.doesNotMatch(metaTrigger, /^\s+paths(?:-ignore)?:/m, "the real repository meta gate must cover every path");
     const trigger = llm.match(eventBlock)?.[1];
     const inputs = Array.from((trigger ?? "").matchAll(/^      - "([^"\n]+)"$/gm), (match) => match[1]);
-    for (const input of ["tooling~/scripts/python-runner.ps1", "tooling~/**/*.py", ".devcontainer/*.py", "tooling~/pyproject.toml", "tooling~/pyrightconfig.json"]) {
+    for (const input of ["tooling~/**/*.py", ".devcontainer/*.py", "tooling~/pyproject.toml", "tooling~/pyrightconfig.json"]) {
       assert.ok(inputs.includes(input), `${event} must trigger on ${input}`);
     }
     assert.deepStrictEqual(inputs.filter((input) => input.startsWith("tooling~/scripts/tests/")), [
-      "tooling~/scripts/tests/test-llm-instructions-lint.ps1",
-      "tooling~/scripts/tests/test-lint-skill-sizes.ps1",
-      "tooling~/scripts/tests/test-lint-unity-meta.ps1",
-      "tooling~/scripts/tests/test-generate-skills-index.ps1",
       "tooling~/scripts/tests/fixtures/valid-skill.md"
-    ], `${event} must include the suite wrappers and fixture without triggering on unrelated Node tests`);
+    ], `${event} must include the fixture without triggering on unrelated Node tests`);
   }
-  for (const wrapper of ["test-llm-instructions-lint", "test-lint-skill-sizes", "test-lint-unity-meta", "test-generate-skills-index"]) {
-    assert.strictEqual(llm.split(`./tooling~/scripts/tests/${wrapper}.ps1 -VerboseOutput`).length - 1, 1, `${wrapper} must run once`);
+  for (const suite of ["test_lint_llm_instructions", "test_lint_skill_sizes", "test_lint_unity_meta", "test_generate_skills_index"]) {
+    assert.strictEqual(llm.split(`${suite}.py`).length - 1, 1, `${suite} must run once`);
   }
-  assert.doesNotMatch(llm, /test_lint_llm_instructions\.py/, "the wrapper already runs this suite");
+  assert.doesNotMatch(llm, /test-llm-instructions-lint\.ps1/, "the typed-python suites run directly");
 });
 
 test("workflow structure: an existing Release is reused on re-run, never re-created", () => {

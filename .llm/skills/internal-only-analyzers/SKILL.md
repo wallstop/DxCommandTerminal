@@ -32,7 +32,7 @@ generator) are intentional and stay.
 ## Workflow
 
 - Red first: add fixtures, run against a no-op analyzer, then implement.
-- Rebuild payloads: `dotnet build` both csprojs under Generator~ (-c Release); verify with `verify-analyzer-payload.ps1` and `-TwoCheckout` (commit first; it compares against the
-  committed tree).
+- Rebuild payloads: `dotnet build` both csprojs under Generator~ (-c Release); verify with
+  `uv run --project tooling~ python tooling~/scripts/verify_analyzer_payload.py --two-checkout` (commit first; it compares against the committed tree).
 - Positive-control drill on the live editor: add a temp file with a banned pattern, recompile via MCP, expect the DxCmd error, remove, recompile clean, then run the full PlayMode
   suite.

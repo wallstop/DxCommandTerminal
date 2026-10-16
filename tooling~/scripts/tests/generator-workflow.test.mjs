@@ -35,6 +35,12 @@ for (const [name, command, log, expectedArgs] of [
         "payload-verifier-tests.log",
         ["run", "--project", "tooling~", "python", "-m", "unittest", "discover", "-s", "tooling~/scripts/tests", "-p", "test_verify_analyzer_payload.py", "-v"],
     ],
+    [
+        "Verify shipped analyzer payload and two-checkout reproducibility",
+        "uv",
+        "payload-reproducibility.log",
+        ["run", "--project", "tooling~", "python", "tooling~/scripts/verify_analyzer_payload.py", "--two-checkout"],
+    ],
 ]) {
     for (const code of [0, 42]) {
         test(`${name}: actual Bash pipeline retains output and exit ${code}`, { skip: process.platform === "win32" }, () => {
@@ -67,36 +73,6 @@ for (const [name, command, log, expectedArgs] of [
             }
         });
     }
-}
-
-for (const code of [0, 43]) {
-    test(`TwoCheckout: actual PowerShell pipeline retains output and exit ${code}`, () => {
-        const root = fs.mkdtempSync(path.join(os.tmpdir(), "generator-workflow-"));
-        try {
-            const scripts = path.join(root, "tooling~", "scripts");
-            fs.mkdirSync(scripts, { recursive: true });
-            fs.writeFileSync(
-                path.join(scripts, "verify-analyzer-payload.ps1"),
-                `param([switch]$TwoCheckout)\n@{ twoCheckout=$TwoCheckout.IsPresent; extraArgs=@($args) } | ConvertTo-Json -Compress | Set-Content $env:CALLS_PATH\nWrite-Output 'stub stdout'\nWrite-Warning 'stub warning'\nexit ([int]$env:STUB_EXIT)\n`,
-            );
-            const runner = path.join(root, "runner.ps1");
-            fs.writeFileSync(runner, "$ErrorActionPreference='Stop'\n" + runBlock("Verify shipped analyzer payload and two-checkout reproducibility"));
-            const calls = path.join(root, "arguments.json");
-            const result = spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-File", runner], {
-                cwd: root,
-                env: { ...process.env, GENERATOR_DIAGNOSTICS: root, CALLS_PATH: calls, STUB_EXIT: String(code) },
-                encoding: "utf8",
-            });
-            assert.ifError(result.error);
-            assert.equal(result.status, code, result.stderr);
-            assert.deepEqual(JSON.parse(fs.readFileSync(calls, "utf8").replace(/^\uFEFF/, "")), { extraArgs: [], twoCheckout: true });
-            const retained = fs.readFileSync(path.join(root, "payload-reproducibility.log"), "utf8");
-            assert.match(retained, /stub stdout/);
-            assert.match(retained, /stub warning/);
-        } finally {
-            fs.rmSync(root, { recursive: true, force: true });
-        }
-    });
 }
 
 test("generator diagnostics upload runs after earlier failures", () => {

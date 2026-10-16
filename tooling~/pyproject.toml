@@ -15,7 +15,7 @@ dependencies = []
 
 [dependency-groups]
 # The typing gate (issue #256): a pinned pyright in basic mode. Non-default
-# group on purpose - plain `uv run` (every ps1 delegator's path) never
+# group on purpose - plain `uv run` (every hook and lint step) never
 # syncs it, so the pre-commit hooks stay dependency-free; the CI step and
 # a local `uv run --project tooling~ --group typing pyright` request it
 # explicitly, and the pip cache keyed on this manifest busts when the pin
