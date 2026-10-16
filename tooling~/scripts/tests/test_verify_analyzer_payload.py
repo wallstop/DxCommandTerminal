@@ -46,9 +46,12 @@ class ArchiveTests(unittest.TestCase):
             for root, value in ((selected, b"selected\x00\xff"), (caller, b"caller")):
                 (root / "Generator~").mkdir(parents=True)
                 (root / "Generator~/source.bin").write_bytes(value)
+                (root / "global.json").write_text('{"sdk":{"version":"9.0.306"}}' if root == selected else '{"sdk":{"version":"999.0.0"}}')
                 git(root, "init", "-q")
                 commit(root)
+            committed_pin = (selected / "global.json").read_bytes()
             (selected / "Generator~/source.bin").write_bytes(b"uncommitted")
+            (selected / "global.json").write_bytes(b"uncommitted pin")
             (selected / "Generator~/untracked").touch()
             output.mkdir()
             previous = Path.cwd()
@@ -60,7 +63,22 @@ class ArchiveTests(unittest.TestCase):
             self.assertNotEqual(checkouts[0], checkouts[1])
             for checkout in checkouts:
                 self.assertEqual((checkout / "Generator~/source.bin").read_bytes(), b"selected\x00\xff")
+                self.assertEqual((checkout / "global.json").read_bytes(), committed_pin)
                 self.assertFalse((checkout / "Generator~/untracked").exists())
+
+    def test_uncommitted_pin_cannot_replace_missing_committed_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "Generator~").mkdir()
+            (root / "Generator~/source.cs").write_text("committed source")
+            git(root, "init", "-q")
+            commit(root)
+            (root / "global.json").write_text("uncommitted pin")
+            output = root / "output"
+            output.mkdir()
+            with self.assertRaisesRegex(ValueError, "git archive.*global.json.*failed") as error:
+                verifier.extract_checkouts(root, output)
+            self.assertIn(str(root), str(error.exception))
 
     def test_archive_failure_is_not_reported_as_success(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -95,10 +113,12 @@ class CompilerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="payload compiler template ") as temporary:
             repo = Path(temporary) / "selected repository"
             repo.mkdir()
+            pin = repo / "global.json"
+            pin.write_bytes((verifier.REPO_ROOT / "global.json").read_bytes())
             git(repo, "init", "-q")
-            sdk = subprocess.check_output(["dotnet", "--version"], text=True).strip().split(".")[0]
+            sdk = subprocess.check_output(["dotnet", "--version"], cwd=repo, text=True).strip().split(".")[0]
             target = f"net{sdk}.0"
-            files: list[Path] = []
+            files: list[Path] = [pin]
             for payload in verifier.PAYLOADS:
                 project = repo / payload.project
                 project.parent.mkdir(parents=True)
@@ -127,6 +147,7 @@ class CompilerTests(unittest.TestCase):
         self.caller = self.base / "caller repository"
         (self.caller / "Generator~").mkdir(parents=True)
         (self.caller / "Generator~/unrelated.txt").write_text("different repository")
+        (self.caller / "global.json").write_text('{"sdk":{"version":"999.0.0","rollForward":"disable","allowPrerelease":false}}')
         git(self.caller, "init", "-q")
         commit(self.caller)
         self.scratch = self.base / "scratch"
@@ -201,6 +222,28 @@ class CompilerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("shipped internal analyzers payload not found", result.stdout)
         self.assertNotIn("Determining projects", result.stdout)
+
+    def test_missing_sdk_pin_fails_before_building_in_both_modes(self) -> None:
+        pin = self.repo / "global.json"
+        pin.unlink()
+        for arguments in ((), ("--two-checkout",)):
+            with self.subTest(arguments=arguments):
+                result = self.run_cli(*arguments)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(f"SDK pin not found: {pin.resolve()}", result.stdout)
+                self.assertNotIn("Determining projects", result.stdout)
+
+    def test_two_checkout_uses_committed_sdk_pin_in_extracted_root(self) -> None:
+        pin = self.repo / "global.json"
+        working_pin = pin.read_bytes()
+        pin.write_text('{"sdk":{"version":"999.0.0","rollForward":"disable","allowPrerelease":false}}')
+        commit(self.repo)
+        pin.write_bytes(working_pin)
+        result = self.run_cli("--two-checkout")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("payload matches its sources", result.stdout)
+        self.assertIn("ERROR: rebuilding", result.stdout)
+        self.assertIn("checkout-a", result.stdout)
 
 
 if __name__ == "__main__":

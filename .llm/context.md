@@ -74,6 +74,8 @@ Adding a skill: create the directory + `SKILL.md`, then run the generator. The l
 
 ## Critical Rules Summary
 
+Install the SDK selected by root `global.json` before running .NET tooling. CI and the devcontainer read this same policy; runtime roll-forward remains project-specific.
+
 ### C# Code Rules
 
 1. `using` directives go INSIDE the namespace block (see any file in `Runtime/`); `#if` blocks INSIDE namespace; `#define` at file top.

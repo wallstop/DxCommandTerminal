@@ -29,6 +29,7 @@ on:
       - master
       - main
     paths:
+      - "global.json"
       - "Runtime/**"
       - "Tests/Editor/**"
       - "Generator~/**"
@@ -41,6 +42,7 @@ on:
       - "tooling~/.npmrc"
   pull_request:
     paths:
+      - "global.json"
       - "Runtime/**"
       - "Tests/Editor/**"
       - "Generator~/**"
@@ -73,13 +75,13 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.306
+          global-json-file: global.json
 
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-compat-${{ hashFiles('tooling~/compat/runtime-2021.3.csproj', 'tooling~/compat/tests/tests-2021.3.csproj', 'tooling~/compat/testhost/testhost.csproj', 'Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/*.csproj') }}
+          key: ${{ runner.os }}-nuget-compat-${{ hashFiles('global.json', 'tooling~/compat/runtime-2021.3.csproj', 'tooling~/compat/tests/tests-2021.3.csproj', 'tooling~/compat/testhost/testhost.csproj', 'Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-compat-
 
       - name: Compile Runtime against 2021.3

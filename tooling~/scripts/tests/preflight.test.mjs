@@ -133,6 +133,7 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   assert.equal(compatCheck.lane, undefined, "no check shares build state anymore; every check owns a lane");
   assert.equal(compatCheck.cacheDotnet, true);
   assert.deepEqual(compatCheck.cachePaths, [
+    "global.json",
     "Runtime",
     "tooling~/package.json",
     "tooling~/compat/runtime-2021.3.csproj"
@@ -567,6 +568,31 @@ test("cache keys hash declared files and ignore unrelated filesystem state", () 
     assert.notEqual(changed, missing);
     fs.mkdirSync(input);
     assert.notEqual(missing, cacheKeyForCheck(check, context));
+
+    /* Freeze tool observations: a policy edit must invalidate SDK gates
+       even when the currently observed SDK version has not changed. */
+    const sdkPin = path.join(root, "global.json");
+    const checks = buildChecks();
+    const sdkChecks = checks.filter((candidate) => candidate.cacheDotnet === true || candidate.cacheDotnetTool === true);
+    assert.ok(sdkChecks.length > 0);
+    const scoped = (candidate) => ({
+      ...candidate,
+      cacheRuntimeEnvironment: false,
+      cachePaths: candidate.cachePaths.map((entry) => path.join(root, entry)),
+      cacheExcludes: (candidate.cacheExcludes ?? []).map((entry) => path.join(root, entry))
+    });
+    const frozenTools = { ...context, dotnet: "9.0.306", docfxTool: "unchanged-docfx", docsApi: "unchanged-api", npm: "unchanged-npm" };
+    const observe = () => new Map(sdkChecks.map((candidate) => [candidate.name, cacheKeyForCheck(scoped(candidate), frozenTools)]));
+    const unrelatedGate = scoped(checks.find((candidate) => candidate.name === "t11-check"));
+    fs.writeFileSync(sdkPin, '{"sdk":{"version":"9.0.306","rollForward":"disable"}}\n');
+    const pinned = observe();
+    const unrelatedKey = cacheKeyForCheck(unrelatedGate, frozenTools);
+    fs.writeFileSync(sdkPin, '{"sdk":{"version":"9.0.306","rollForward":"latestPatch"}}\n');
+    const policyChanged = observe();
+    for (const candidate of sdkChecks) {
+      assert.notEqual(pinned.get(candidate.name), policyChanged.get(candidate.name), `${candidate.name} must invalidate when SDK selection policy changes`);
+    }
+    assert.equal(unrelatedKey, cacheKeyForCheck(unrelatedGate, frozenTools), "an SDK-only edit must not invalidate a non-SDK gate");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

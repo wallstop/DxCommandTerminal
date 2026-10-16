@@ -6,6 +6,7 @@ on:
       - master
       - main
     paths:
+      - "global.json"
       - "package.json"
       - ".devcontainer/**"
       - "tooling~/**"
@@ -30,6 +31,7 @@ on:
       - ".github/workflows/**"
   pull_request:
     paths:
+      - "global.json"
       - "package.json"
       - ".devcontainer/**"
       - "tooling~/**"
@@ -259,7 +261,7 @@ jobs:
         run: |
           # Everything the job reads: the grammar project and the two dev
           # tool C# files it compiles, the reader import plus its module-scope
-          # t11 imports, the npm inputs the install reads, this workflow.
+          # t11 imports, SDK pin, npm inputs, and this workflow.
           #
           # The base must span the event's WHOLE change range, not the
           # last commit: a PR diffs from its base SHA (the merge-ref
@@ -279,6 +281,7 @@ jobs:
             base="$(git rev-parse HEAD~1)"
           fi
           if git diff --name-only "$base" HEAD -- \
+            global.json \
             tooling~/scripts/mcp/grammar \
             tooling~/scripts/mcp/DxTerminalTestRunReporter.cs.txt \
             tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt \
@@ -303,7 +306,7 @@ jobs:
         if: steps.grammar-inputs.outputs.changed == 'true'
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.306
+          global-json-file: global.json
 
       # net8.0 under a newer SDK pulls its targeting and apphost packs from
       # nuget.org, so the shared cold cost is cached here too.
@@ -312,7 +315,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('tooling~/scripts/mcp/grammar/DxTerminalClaimGrammar.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'tooling~/scripts/mcp/grammar/DxTerminalClaimGrammar.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
       # The claim reader is imported from unity-mcp.mjs, so this job needs the
