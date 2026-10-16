@@ -228,6 +228,11 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     true,
     "mcp members load the SDK from tooling~/node_modules"
   );
+  assert.equal(csharpCheck.cacheDependencies, true, "export-unitypackage-real spawns npm pack");
+  assert.equal(csharpCheck.cacheNpm, undefined, "npm keys through install bytes, not an executable walk");
+  for (const gate of [toolingCheck, csharpCheck]) {
+    assert.equal(gate.cacheNpmConfig, true, `${gate.name} spawns npm pack`);
+  }
   assert.equal(csharpCheck.cacheUv, undefined, "no tree-keyed member spawns uv");
   assert.deepEqual(csharpCheck.cachePaths, [
     "Runtime",
@@ -254,7 +259,8 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     "tooling~/compat",
     "tooling~/scripts/release",
     "tooling~/scripts/t13",
-    "tooling~/scripts/tests/support",
+    "tooling~/scripts/tests",
+    "tooling~/scripts/mcp/__tests__",
     "tooling~/scripts/preflight.mjs",
     "tooling~/scripts/preflight-cache.mjs",
     "tooling~/scripts/lint-comparison-direction.mjs",

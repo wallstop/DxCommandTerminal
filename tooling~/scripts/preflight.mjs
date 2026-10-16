@@ -33,7 +33,9 @@ export const NODE_TEST_SPLITS = {
       YAML, and python-entries runs the typed-python linters over the live
       .llm tree through uv. Keys: tooling~ (scripts, fixtures, manifest),
       the workflow files, .llm, the bash shim two members execute snippets
-      with, and the uv runtime python-entries resolves through.
+      with, the uv runtime python-entries resolves through, the installed
+      dependency bytes the mcp tests load the SDK from, and the npm
+      config the exporter members pack their fixtures under.
    */
   "node-tests-tooling": [
     "tooling~/scripts/mcp/__tests__/bridge-port.test.mjs",
@@ -72,10 +74,14 @@ export const NODE_TEST_SPLITS = {
       capture sources, analyzer-placement hunts stray payload copies from
       the repo root down (Media/ and progress/ included), and
       preflight.test reads .config and tooling~/compat. Keys: every walked
-      root plus the tooling~ scripts and fixtures those members import.
-      Stated coin: a NEW repo-root entry the stray hunt walks - a loose
-      file named exactly like an analyzer payload, or a whole new
-      root-level directory - defeats the key until the next keyed edit.
+      root plus the tooling~ scripts those members import, and both suite
+      directories - their bytes are the gate's own inputs, and the
+      completeness pin that fails on an unassigned new suite file lives in
+      preflight.test.mjs, so a file added to either half re-runs this gate
+      and fails loudly. Stated coin: a NEW repo-root entry the stray hunt
+      walks - a loose file named exactly like an analyzer payload, or a
+      whole new root-level directory - defeats the key until the next
+      keyed edit.
    */
   "node-tests-csharp": [
     "tooling~/scripts/tests/analyzer-placement.test.mjs",
@@ -136,56 +142,77 @@ export function buildChecks() {
             way npm and git do for the checks that spawn them. The mcp
             tests import unity-mcp.mjs, which loads the MCP SDK from
             tooling~/node_modules (or the baked /opt/dxt-mcp tree), so
-            the installed dependency bytes join the key too.
+            the installed dependency bytes join the key too, and the
+            export-unitypackage members spawn npm pack against their
+            fixture roots, so the npm config joins it the way
+            package-validate keys its own npm pack.
 
             Stated coin: the uv venv (tooling~/.venv, uv.lock - both
             git-ignored) is keyed only through the uv release here; uv
             run re-syncs the venv from the tracked pyproject before
             executing, so a recreated or drifted venv heals at run time
-            instead of moving this key.
+            instead of moving this key. The npm that packs the exporter
+            fixtures is keyed through its install bytes under
+            tooling~/node_modules (cacheDependencies) and its config, not
+            through a resolved-executable walk - a global npm outside the
+            workspace is the same documented coin the exporter's own
+            artifact cache states, and a node upgrade carries its npm
+            behind the always-keyed node version.
          */
         cacheUv: true,
         cacheBash: true,
-        cacheDependencies: true
+        cacheDependencies: true,
+        cacheNpmConfig: true
       }
     ),
-    nodeTestsCheck("node-tests-csharp", [
-      "Runtime",
-      "Editor",
-      "Tests",
-      "Generator~",
-      "Packs",
-      "Styles",
-      "Fonts",
-      "Samples~",
-      "Media",
-      "progress",
-      "package.json",
-      "package.json.meta",
-      "CHANGELOG.md",
-      "CHANGELOG.md.meta",
-      "LICENSE",
-      "LICENSE.meta",
-      "README.md",
-      "README.md.meta",
-      ".config",
-      ".npmignore",
-      ".gitignore",
-      "tooling~/compat",
-      "tooling~/scripts/release",
-      "tooling~/scripts/t13",
-      "tooling~/scripts/tests/support",
-      "tooling~/scripts/preflight.mjs",
-      "tooling~/scripts/preflight-cache.mjs",
-      "tooling~/scripts/lint-comparison-direction.mjs",
-      "tooling~/scripts/lint-exception-tostring.mjs",
-      "tooling~/scripts/lint-member-ordering.mjs",
-      "tooling~/scripts/lint-minimal-comments.mjs",
-      "tooling~/scripts/lint-theme-palette-tokens.mjs",
-      "tooling~/scripts/lib",
-      "tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt",
-      "tooling~/scripts/mcp/DxTerminalTestRunReporter.cs.txt"
-    ]),
+    nodeTestsCheck(
+      "node-tests-csharp",
+      [
+        "Runtime",
+        "Editor",
+        "Tests",
+        "Generator~",
+        "Packs",
+        "Styles",
+        "Fonts",
+        "Samples~",
+        "Media",
+        "progress",
+        "package.json",
+        "package.json.meta",
+        "CHANGELOG.md",
+        "CHANGELOG.md.meta",
+        "LICENSE",
+        "LICENSE.meta",
+        "README.md",
+        "README.md.meta",
+        ".config",
+        ".npmignore",
+        ".gitignore",
+        "tooling~/compat",
+        "tooling~/scripts/release",
+        "tooling~/scripts/t13",
+        "tooling~/scripts/tests",
+        "tooling~/scripts/mcp/__tests__",
+        "tooling~/scripts/preflight.mjs",
+        "tooling~/scripts/preflight-cache.mjs",
+        "tooling~/scripts/lint-comparison-direction.mjs",
+        "tooling~/scripts/lint-exception-tostring.mjs",
+        "tooling~/scripts/lint-member-ordering.mjs",
+        "tooling~/scripts/lint-minimal-comments.mjs",
+        "tooling~/scripts/lint-theme-palette-tokens.mjs",
+        "tooling~/scripts/lib",
+        "tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt",
+        "tooling~/scripts/mcp/DxTerminalTestRunReporter.cs.txt"
+      ],
+      {
+        // export-unitypackage-real spawns npm pack over the packaged
+        // allowlist; key the npm bytes and config through the workspace
+        // install (the cheap dependencies fold), not an executable walk.
+        cacheDependencies: true,
+        cacheNpmConfig: true
+      }
+    ),
     {
       /*
           The player-tooling python suites CI runs in tooling-tests.yml,
