@@ -674,31 +674,41 @@ namespace Fixtures
             (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
                 TestCompilationFactory.CreateCompilation("ConstructionTables", fixture.ToString())
             );
-            List<ArrayCreationExpressionSyntax> tables = generated
+            List<VariableDeclaratorSyntax> tables = generated
                 .GetRoot()
                 .DescendantNodes()
-                .OfType<ArrayCreationExpressionSyntax>()
-                .Where(array =>
-                    array.Parent is EqualsValueClauseSyntax equals
-                    && equals.Parent is VariableDeclaratorSyntax variable
-                    && string.Equals(variable.Identifier.ValueText, "metadata", StringComparison.Ordinal)
+                .OfType<VariableDeclaratorSyntax>()
+                .Where(variable =>
+                    string.Equals(variable.Identifier.ValueText, "metadata", StringComparison.Ordinal)
+                    && variable.Initializer.Value is LiteralExpressionSyntax literal
+                    && literal.IsKind(SyntaxKind.StringLiteralExpression)
                 )
                 .ToList();
             Assert.Equal(3, tables.Count);
-            Assert.Equal(64, tables[0].Initializer.Expressions.Count);
-            Assert.Equal(64, tables[1].Initializer.Expressions.Count);
-            Assert.Equal(192, tables[2].Initializer.Expressions.Count);
-            Assert.Equal("table0015", ((LiteralExpressionSyntax)tables[0].Initializer.Expressions[0]).Token.ValueText);
-            Assert.Equal("table0048", ((LiteralExpressionSyntax)tables[1].Initializer.Expressions[0]).Token.ValueText);
-            Assert.Equal("table0064", ((LiteralExpressionSyntax)tables[2].Initializer.Expressions[0]).Token.ValueText);
+            string[][] fields = tables.Select(table => ((LiteralExpressionSyntax)table.Initializer.Value).Token.ValueText.Split('\0')).ToArray();
+            Assert.Equal(32, fields[0].Length);
+            Assert.Equal(32, fields[1].Length);
+            Assert.Equal(96, fields[2].Length);
+            Assert.Equal("table0015", fields[0][0]);
+            Assert.Equal("table0048", fields[1][0]);
+            Assert.Equal("table0064", fields[2][0]);
             Assert.All(
                 tables,
                 table =>
                 {
-                    for (int offset = 0; offset < table.Initializer.Expressions.Count; offset += 4)
+                    BlockSyntax block = table.Ancestors().OfType<BlockSyntax>().First();
+                    ForStatementSyntax loop = Assert.Single(block.Statements.OfType<ForStatementSyntax>());
+                    InvocationExpressionSyntax create = Assert.Single(
+                        loop.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call => call.Expression.ToString().StartsWith("CreateEntry", StringComparison.Ordinal))
+                    );
+                    Assert.True(create.ArgumentList.Arguments[2].Expression.IsKind(SyntaxKind.NullLiteralExpression));
+                    Assert.True(create.ArgumentList.Arguments[3].Expression.IsKind(SyntaxKind.NullLiteralExpression));
+                    string[] values = ((LiteralExpressionSyntax)table.Initializer.Value).Token.ValueText.Split('\0');
+                    BinaryExpressionSyntax condition = Assert.IsType<BinaryExpressionSyntax>(loop.Condition);
+                    Assert.Equal(values.Length / 2, (int)((LiteralExpressionSyntax)condition.Right).Token.Value);
+                    for (int offset = 0; offset < values.Length; offset += 2)
                     {
-                        Assert.True(table.Initializer.Expressions[offset + 2].IsKind(SyntaxKind.NullLiteralExpression));
-                        Assert.True(table.Initializer.Expressions[offset + 3].IsKind(SyntaxKind.NullLiteralExpression));
+                        Assert.Equal(string.Concat("Command", values[offset].AsSpan("table".Length)), values[offset + 1]);
                     }
                 }
             );
@@ -747,6 +757,124 @@ namespace Fixtures
                 handler.DynamicInvoke(arguments);
             }
             int[] calls = (int[])assembly.GetType("Fixtures.TableCommands").GetField("Calls").GetValue(null);
+            Assert.All(calls, value => Assert.Equal(1, value));
+        }
+
+        [Fact]
+        public void PackedConstructionPreservesNulFallbackEmptyNamesAndUnicode()
+        {
+            const int count = 128;
+            StringBuilder fixture = new StringBuilder();
+            fixture.AppendLine("namespace Fixtures { using WallstopStudios.DxCommandTerminal.Attributes; using WallstopStudios.DxCommandTerminal.Backend;");
+            fixture.AppendLine("public static class PackedCommands { public static int[] Calls = new int[128];");
+            string[] expectedNames = new string[count];
+            string[] expectedMethods = new string[count];
+            for (int index = 0; index < count; index++)
+            {
+                string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
+                expectedNames[index] =
+                    index == 8 ? "packed0008\0tail"
+                    : index == 64 ? string.Empty
+                    : index == 65 ? "packed0065Ω😀quote\"slash\\newline\nend"
+                    : "packed" + suffix;
+                expectedMethods[index] =
+                    index == 64 ? "Command"
+                    : index == 66 ? "CommandΩ"
+                    : "Command" + suffix;
+                fixture.Append("[RegisterCommand(");
+                if (index != 64)
+                {
+                    fixture.Append("Name = ").Append(SymbolDisplay.FormatLiteral(expectedNames[index], true)).Append(", ");
+                }
+                fixture
+                    .Append("MinArgCount = 0, MaxArgCount = 0)] public static void ")
+                    .Append(expectedMethods[index])
+                    .Append("(CommandArg[] arguments) { Calls[")
+                    .Append(index)
+                    .AppendLine("]++; }");
+            }
+            fixture.AppendLine("} }");
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation("PackedConstructionEdges", fixture.ToString())
+            );
+            List<VariableDeclaratorSyntax> tables = generated
+                .GetRoot()
+                .DescendantNodes()
+                .OfType<VariableDeclaratorSyntax>()
+                .Where(variable => string.Equals(variable.Identifier.ValueText, "metadata", StringComparison.Ordinal))
+                .ToList();
+            Assert.Equal(2, tables.Count);
+            ArrayCreationExpressionSyntax fallback = Assert.IsType<ArrayCreationExpressionSyntax>(tables[0].Initializer.Value);
+            Assert.Equal(256, fallback.Initializer.Expressions.Count);
+            for (int index = 0; index < 64; index++)
+            {
+                int offset = index * 4;
+                Assert.Equal(expectedNames[index], ((LiteralExpressionSyntax)fallback.Initializer.Expressions[offset]).Token.ValueText);
+                Assert.Equal(expectedMethods[index], ((LiteralExpressionSyntax)fallback.Initializer.Expressions[offset + 1]).Token.ValueText);
+                Assert.True(fallback.Initializer.Expressions[offset + 2].IsKind(SyntaxKind.NullLiteralExpression));
+                Assert.True(fallback.Initializer.Expressions[offset + 3].IsKind(SyntaxKind.NullLiteralExpression));
+            }
+            LiteralExpressionSyntax packed = Assert.IsType<LiteralExpressionSyntax>(tables[1].Initializer.Value);
+            Assert.True(packed.IsKind(SyntaxKind.StringLiteralExpression));
+            string[] fields = packed.Token.ValueText.Split('\0');
+            Assert.Equal(128, fields.Length);
+            for (int index = 64; index < count; index++)
+            {
+                int offset = (index - 64) * 2;
+                Assert.Equal(expectedNames[index], fields[offset]);
+                Assert.Equal(expectedMethods[index], fields[offset + 1]);
+            }
+            Assert.Single(
+                generated
+                    .GetRoot()
+                    .DescendantNodes()
+                    .OfType<MethodDeclarationSyntax>()
+                    .Where(method => string.Equals(method.Identifier.ValueText, "ReadPackedMetadata", StringComparison.Ordinal))
+            );
+            Assert.Equal(
+                2,
+                generated
+                    .GetRoot()
+                    .DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Count(call => string.Equals(call.Expression.ToString(), "entries.Add", StringComparison.Ordinal))
+            );
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            CatalogView repeated = CatalogView.Load(assembly);
+            Assert.Equal(count, catalog.Entries.Count);
+            Assert.Equal(count, repeated.Entries.Count);
+            FieldInfo cachedHandler = catalog.Entries[0].GetType().GetField("_boundHandler", BindingFlags.Instance | BindingFlags.NonPublic);
+            object[] arguments = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
+            for (int index = 0; index < count; index++)
+            {
+                object entry = catalog.Entries[index];
+                Assert.Same(entry, repeated.Entries[index]);
+                Assert.Equal(expectedNames[index], catalog.NameOf(entry));
+                Assert.Equal(expectedMethods[index], catalog.MethodNameOf(entry));
+                Assert.Null(catalog.HelpOf(entry));
+                Assert.Null(catalog.HintOf(entry));
+                Assert.Equal(0, catalog.MinArgCountOf(entry));
+                Assert.Equal(0, catalog.MaxArgCountOf(entry));
+                Assert.True(catalog.AddToHistoryOf(entry));
+                Assert.False(catalog.EditorOnlyOf(entry));
+                Assert.False(catalog.DevelopmentOnlyOf(entry));
+                Assert.False(catalog.IsDefaultOf(entry));
+                Assert.Equal(7, catalog.ContextsOf(entry));
+                Assert.Equal("Fixtures.PackedCommands", catalog.DeclaringTypeNameOf(entry));
+                Assert.Null(catalog.MethodAccessorOf(entry));
+                Assert.Null(cachedHandler.GetValue(entry));
+                (object first, object second) = catalog.GetHandlerPairOf(entry);
+                Assert.Same(first, second);
+                Assert.Same(first, cachedHandler.GetValue(entry));
+                Delegate handler = (Delegate)first;
+                Assert.Null(handler.Target);
+                Assert.True(handler.Method.IsStatic);
+                Assert.Equal(expectedMethods[index], handler.Method.Name);
+                Assert.Equal("Fixtures.PackedCommands", handler.Method.DeclaringType.FullName);
+                handler.DynamicInvoke(arguments);
+            }
+            int[] calls = (int[])assembly.GetType("Fixtures.PackedCommands").GetField("Calls").GetValue(null);
             Assert.All(calls, value => Assert.Equal(1, value));
         }
 

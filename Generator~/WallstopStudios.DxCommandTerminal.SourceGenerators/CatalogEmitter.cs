@@ -74,6 +74,7 @@
             int capacity = BaseCapacityEstimate + PerCommandCapacityEstimate * commandCount;
             StringBuilder builder = RentBuilder(capacity);
             bool needsUnboundFinder = false;
+            bool needsPackedDecoder = false;
 
             foreach (CommandModel command in commands)
             {
@@ -200,7 +201,7 @@
                         .AppendLine(" entries)");
                     builder.Append(Indent3).AppendLine("{");
                     int end = Math.Min(start + EntriesPerMethod, commandCount);
-                    EmitCommandRange(builder, start, end, commands, holderIndicesByCommand, sharedMetadata, indexedSlots);
+                    needsPackedDecoder |= EmitCommandRange(builder, start, end, commands, holderIndicesByCommand, sharedMetadata, indexedSlots);
                     builder.Append(Indent3).AppendLine("}");
                 }
             }
@@ -236,6 +237,10 @@
             if (0 < indexedChunks.Count)
             {
                 EmitIndexedBinders(builder, commands, indexedChunks);
+            }
+            if (needsPackedDecoder)
+            {
+                EmitPackedDecoder(builder);
             }
             builder.Append(Indent2).AppendLine("}");
             builder.AppendLine("}");
@@ -278,7 +283,7 @@
             builder.AppendLine("{");
         }
 
-        private static void EmitCommandRange(
+        private static bool EmitCommandRange(
             StringBuilder builder,
             int start,
             int end,
@@ -288,6 +293,7 @@
             int?[] indexedSlots
         )
         {
+            bool emittedPacked = false;
             int index = start;
             while (index < end)
             {
@@ -307,30 +313,47 @@
                 }
                 if (16 <= next - index)
                 {
-                    builder.AppendLine();
-                    builder.Append(Indent4).AppendLine("{");
-                    builder.Append(Indent5).AppendLine("string[] metadata = new string[]");
-                    builder.Append(Indent5).AppendLine("{");
+                    bool canPack = true;
                     for (int item = index; item < next; item++)
                     {
-                        CommandModel command = commands[item];
-                        AppendLiteral(builder, command.CommandName, Indent6);
-                        builder.AppendLine(",");
-                        AppendLiteral(builder, command.MethodName, Indent6);
-                        builder.AppendLine(",");
-                        AppendLiteral(builder, command.Help, Indent6);
-                        builder.AppendLine(",");
-                        AppendLiteral(builder, command.Hint, Indent6);
-                        builder.AppendLine(",");
+                        if (0 <= commands[item].CommandName.IndexOf('\0') || 0 <= commands[item].MethodName.IndexOf('\0'))
+                        {
+                            canPack = false;
+                            break;
+                        }
                     }
-                    builder.Append(Indent5).AppendLine("};");
-                    builder.Append(Indent5).AppendLine("for (int offset = 0; offset < metadata.Length; offset += 4)");
-                    builder.Append(Indent5).AppendLine("{");
-                    builder.Append(Indent6).Append("entries.Add(CreateEntry").Append(sharedMetadata[index].Value.ToString(CultureInfo.InvariantCulture));
-                    builder.Append("(metadata[offset], metadata[offset + 1], metadata[offset + 2], metadata[offset + 3], ");
-                    builder.Append(indexedSlots[index].Value.ToString(CultureInfo.InvariantCulture)).AppendLine(" + offset / 4));");
-                    builder.Append(Indent5).AppendLine("}");
-                    builder.Append(Indent4).AppendLine("}");
+                    if (canPack)
+                    {
+                        EmitPackedRun(builder, index, next, commands, sharedMetadata[index].Value, indexedSlots[index].Value);
+                        emittedPacked = true;
+                    }
+                    else
+                    {
+                        builder.AppendLine();
+                        builder.Append(Indent4).AppendLine("{");
+                        builder.Append(Indent5).AppendLine("string[] metadata = new string[]");
+                        builder.Append(Indent5).AppendLine("{");
+                        for (int item = index; item < next; item++)
+                        {
+                            CommandModel command = commands[item];
+                            AppendLiteral(builder, command.CommandName, Indent6);
+                            builder.AppendLine(",");
+                            AppendLiteral(builder, command.MethodName, Indent6);
+                            builder.AppendLine(",");
+                            AppendLiteral(builder, command.Help, Indent6);
+                            builder.AppendLine(",");
+                            AppendLiteral(builder, command.Hint, Indent6);
+                            builder.AppendLine(",");
+                        }
+                        builder.Append(Indent5).AppendLine("};");
+                        builder.Append(Indent5).AppendLine("for (int offset = 0; offset < metadata.Length; offset += 4)");
+                        builder.Append(Indent5).AppendLine("{");
+                        builder.Append(Indent6).Append("entries.Add(CreateEntry").Append(sharedMetadata[index].Value.ToString(CultureInfo.InvariantCulture));
+                        builder.Append("(metadata[offset], metadata[offset + 1], metadata[offset + 2], metadata[offset + 3], ");
+                        builder.Append(indexedSlots[index].Value.ToString(CultureInfo.InvariantCulture)).AppendLine(" + offset / 4));");
+                        builder.Append(Indent5).AppendLine("}");
+                        builder.Append(Indent4).AppendLine("}");
+                    }
                     index = next;
                 }
                 else
@@ -342,6 +365,44 @@
                     }
                 }
             }
+            return emittedPacked;
+        }
+
+        private static void EmitPackedRun(StringBuilder builder, int start, int end, List<CommandModel> commands, int representative, int slot)
+        {
+            StringBuilder packed = new StringBuilder();
+            for (int index = start; index < end; index++)
+            {
+                if (index != start)
+                {
+                    packed.Append('\0');
+                }
+                packed.Append(commands[index].CommandName).Append('\0').Append(commands[index].MethodName);
+            }
+            builder.AppendLine();
+            builder.Append(Indent4).AppendLine("{");
+            builder.Append(Indent5).Append("string metadata = ").Append(SymbolDisplay.FormatLiteral(packed.ToString(), quote: true)).AppendLine(";");
+            builder.Append(Indent5).AppendLine("int position = 0;");
+            builder.Append(Indent5).Append("for (int offset = 0; offset < ").Append((end - start).ToString(CultureInfo.InvariantCulture)).AppendLine("; offset++)");
+            builder.Append(Indent5).AppendLine("{");
+            builder.Append(Indent6).Append("entries.Add(CreateEntry").Append(representative.ToString(CultureInfo.InvariantCulture));
+            builder.Append("(ReadPackedMetadata(metadata, ref position), ReadPackedMetadata(metadata, ref position), null, null, ");
+            builder.Append(slot.ToString(CultureInfo.InvariantCulture)).AppendLine(" + offset));");
+            builder.Append(Indent5).AppendLine("}");
+            builder.Append(Indent4).AppendLine("}");
+        }
+
+        private static void EmitPackedDecoder(StringBuilder builder)
+        {
+            builder.AppendLine();
+            builder.Append(Indent3).AppendLine("private static string ReadPackedMetadata(string metadata, ref int position)");
+            builder.Append(Indent3).AppendLine("{");
+            builder.Append(Indent4).AppendLine("int end = metadata.IndexOf('\\0', position);");
+            builder.Append(Indent4).AppendLine("if (end < 0) end = metadata.Length;");
+            builder.Append(Indent4).AppendLine("string value = metadata.Substring(position, end - position);");
+            builder.Append(Indent4).AppendLine("position = end < metadata.Length ? end + 1 : end;");
+            builder.Append(Indent4).AppendLine("return value;");
+            builder.Append(Indent3).AppendLine("}");
         }
 
         private static void EmitCommand(StringBuilder builder, int commandIndex, CommandModel command, int holderIndex, int? sharedMetadataIndex, int? indexedSlot)
