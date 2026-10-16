@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const toolingRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const preflightPath = path.join(toolingRoot, "scripts", "preflight.mjs");
-const { buildChecks, parseSkip, runChecks, main } = await import(
+const { buildChecks, parseSkip, parseOnly, runChecks, main } = await import(
   pathToFileURL(preflightPath).href
 );
 const {
@@ -255,6 +255,49 @@ test("parseSkip: unknown name fails loudly with the known set", () => {
   assert.throws(() => parseSkip(["--skip=nope"], ["node-tests"]), /unknown --skip name 'nope'/);
 });
 
+const onlyCases = [
+  case_("inline form selects by exact name", {
+    argv: ["--only=node-tests,docs-guides"],
+    selected: ["node-tests", "docs-guides"]
+  }),
+  case_("space form selects identically", {
+    argv: ["--only", "t11-check"],
+    selected: ["t11-check"]
+  }),
+  case_("whitespace and empty segments are ignored", {
+    argv: ["--only=node-tests, , docs-guides ,"],
+    selected: ["node-tests", "docs-guides"]
+  }),
+  case_("no flag selects everything", { argv: [], selected: [] })
+];
+
+for (const { name, argv, selected } of onlyCases) {
+  test(`parseOnly: ${name}`, () => {
+    const known = ["node-tests", "docs-guides", "t11-check"];
+    const got = parseOnly(argv, known);
+    assert.deepEqual(
+      got.sort(),
+      [...selected].sort(),
+      "only must list exactly the selected names"
+    );
+  });
+}
+
+test("parseOnly: unknown name fails loudly with the known set", () => {
+  assert.throws(() => parseOnly(["--only=nope"], ["node-tests"]), /unknown --only name 'nope'/);
+});
+
+const strictOnlyCases = [
+  case_("missing value", { argv: ["--only"] }),
+  case_("flag-shaped value", { argv: ["--only", "--help"] })
+];
+
+for (const { name, argv } of strictOnlyCases) {
+  test(`parseOnly: ${name} fails instead of selecting nothing`, () => {
+    assert.throws(() => parseOnly(argv, ["node-tests"]), /--only requires a comma-separated name list/);
+  });
+}
+
 const strictSkipCases = [
   case_("missing value", { argv: ["--skip"] }),
   case_("flag-shaped value", { argv: ["--skip", "--help"] })
@@ -382,6 +425,37 @@ test("main: skipping every check refuses to scan nothing", async () => {
 
 test("main: unknown --skip name throws before spawning", async () => {
   await assert.rejects(() => main(["--skip=definitely-not-a-check"]), /unknown --skip name/);
+});
+
+test("main: unknown --only name throws before spawning", async () => {
+  await assert.rejects(() => main(["--only=definitely-not-a-check"]), /unknown --only name/);
+});
+
+test("main: --skip and --only are mutually exclusive", async () => {
+  await assert.rejects(() => main(["--skip=node-tests", "--only=node-tests"]), /mutually exclusive/);
+});
+
+test("main: --only runs just the selected checks", async () => {
+  const pass = writeTempScript("console.log('selected'); process.exit(0);");
+  const fail = writeTempScript("console.error('unselected-ran-marker'); process.exit(1);");
+  const logged = [];
+  const originalLog = console.log;
+  console.log = (line) => logged.push(line);
+  try {
+    const exitCode = await main(["--only=selected-a,selected-b"], [
+      { name: "selected-a", command: `node "${pass}"` },
+      { name: "selected-b", command: `node "${pass}"` },
+      { name: "unselected", command: `node "${fail}"` }
+    ]);
+    assert.equal(exitCode, 0, "selected checks must pass");
+    const output = logged.join("\n");
+    assert.ok(output.includes("ok   selected-a"), `selected check must run: ${output}`);
+    assert.ok(output.includes("ok   selected-b"), `selected check must run: ${output}`);
+    assert.ok(output.includes("2/2 passed"), `summary must count only the selection: ${output}`);
+    assert.ok(!output.includes("unselected"), `unselected check must not run: ${output}`);
+  } finally {
+    console.log = originalLog;
+  }
 });
 
 test("main: injected checks drive the happy path and exit 0", async () => {
