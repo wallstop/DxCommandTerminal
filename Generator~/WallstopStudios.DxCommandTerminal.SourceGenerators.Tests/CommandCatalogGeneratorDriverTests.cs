@@ -614,6 +614,142 @@ namespace Fixtures
             Assert.Contains(catalog.Entries, entry => catalog.NameOf(entry) == "Always");
         }
 
+        [Fact]
+        public void SharedConstructionTablesRequireLongNullMetadataRunsAndPreserveEntries()
+        {
+            const int count = 112;
+            StringBuilder fixture = new StringBuilder();
+            fixture.AppendLine("namespace Fixtures { using WallstopStudios.DxCommandTerminal.Attributes; using WallstopStudios.DxCommandTerminal.Backend;");
+            fixture.AppendLine("public static class TableCommands { public static int[] Calls = new int[112];");
+            string[] expectedHelp = new string[count];
+            string[] expectedHint = new string[count];
+            int[] groups = new int[count];
+            for (int index = 0; index < count; index++)
+            {
+                int group =
+                    index < 15 ? 0
+                    : index < 31 ? 1
+                    : index < 48 ? 2
+                    : 3;
+                groups[index] = group;
+                string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
+                if (group == 2)
+                {
+                    expectedHelp[index] =
+                        index % 3 == 0 ? null
+                        : index % 3 == 1 ? string.Empty
+                        : "quote \" slash \\ newline\n NUL\0 Ω 😀";
+                    expectedHint[index] =
+                        expectedHelp[index] == null ? string.Empty
+                        : index % 2 == 0 ? "hint\t\"\\\0 Ω"
+                        : null;
+                }
+                fixture
+                    .Append(group == 2 ? "[RegisterCommand(true, Name = \"table" : "[RegisterCommand(Name = \"table")
+                    .Append(suffix)
+                    .Append("\", Help = ")
+                    .Append(expectedHelp[index] == null ? "null" : SymbolDisplay.FormatLiteral(expectedHelp[index], true))
+                    .Append(", Hint = ")
+                    .Append(expectedHint[index] == null ? "null" : SymbolDisplay.FormatLiteral(expectedHint[index], true))
+                    .Append(", MinArgCount = ")
+                    .Append(group)
+                    .Append(", MaxArgCount = ")
+                    .Append(group + 4)
+                    .Append(", AddToHistory = ")
+                    .Append(group == 3 ? "false" : "true")
+                    .Append(", EditorOnly = ")
+                    .Append(group == 1 ? "true" : "false")
+                    .Append(", DevelopmentOnly = ")
+                    .Append(group == 2 ? "true" : "false")
+                    .Append(", Contexts = (CommandExecutionContexts)(")
+                    .Append(group - 17)
+                    .Append("))] ")
+                    .Append("public static void Command")
+                    .Append(suffix)
+                    .Append("(CommandArg[] arguments) { Calls[")
+                    .Append(index)
+                    .AppendLine("]++; }");
+            }
+            fixture.AppendLine("} }");
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation("ConstructionTables", fixture.ToString())
+            );
+            List<ArrayCreationExpressionSyntax> tables = generated
+                .GetRoot()
+                .DescendantNodes()
+                .OfType<ArrayCreationExpressionSyntax>()
+                .Where(array =>
+                    array.Parent is EqualsValueClauseSyntax equals
+                    && equals.Parent is VariableDeclaratorSyntax variable
+                    && string.Equals(variable.Identifier.ValueText, "metadata", StringComparison.Ordinal)
+                )
+                .ToList();
+            Assert.Equal(3, tables.Count);
+            Assert.Equal(64, tables[0].Initializer.Expressions.Count);
+            Assert.Equal(64, tables[1].Initializer.Expressions.Count);
+            Assert.Equal(192, tables[2].Initializer.Expressions.Count);
+            Assert.Equal("table0015", ((LiteralExpressionSyntax)tables[0].Initializer.Expressions[0]).Token.ValueText);
+            Assert.Equal("table0048", ((LiteralExpressionSyntax)tables[1].Initializer.Expressions[0]).Token.ValueText);
+            Assert.Equal("table0064", ((LiteralExpressionSyntax)tables[2].Initializer.Expressions[0]).Token.ValueText);
+            Assert.All(
+                tables,
+                table =>
+                {
+                    for (int offset = 0; offset < table.Initializer.Expressions.Count; offset += 4)
+                    {
+                        Assert.True(table.Initializer.Expressions[offset + 2].IsKind(SyntaxKind.NullLiteralExpression));
+                        Assert.True(table.Initializer.Expressions[offset + 3].IsKind(SyntaxKind.NullLiteralExpression));
+                    }
+                }
+            );
+            Assert.Equal(
+                35,
+                generated
+                    .GetRoot()
+                    .DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Count(call => string.Equals(call.Expression.ToString(), "entries.Add", StringComparison.Ordinal))
+            );
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            CatalogView repeated = CatalogView.Load(assembly);
+            Assert.Equal(count, catalog.Entries.Count);
+            Assert.Equal(count, repeated.Entries.Count);
+            FieldInfo cachedHandler = catalog.Entries[0].GetType().GetField("_boundHandler", BindingFlags.Instance | BindingFlags.NonPublic);
+            object[] arguments = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
+            for (int index = 0; index < count; index++)
+            {
+                object entry = catalog.Entries[index];
+                int group = groups[index];
+                string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.Same(entry, repeated.Entries[index]);
+                Assert.Equal("table" + suffix, catalog.NameOf(entry));
+                Assert.Equal("Command" + suffix, catalog.MethodNameOf(entry));
+                Assert.Equal(expectedHelp[index], catalog.HelpOf(entry));
+                Assert.Equal(expectedHint[index], catalog.HintOf(entry));
+                Assert.Equal(group, catalog.MinArgCountOf(entry));
+                Assert.Equal(group + 4, catalog.MaxArgCountOf(entry));
+                Assert.Equal(group != 3, catalog.AddToHistoryOf(entry));
+                Assert.Equal(group == 1, catalog.EditorOnlyOf(entry));
+                Assert.Equal(group == 2, catalog.DevelopmentOnlyOf(entry));
+                Assert.Equal(group == 2, catalog.IsDefaultOf(entry));
+                Assert.Equal(group - 17, catalog.ContextsOf(entry));
+                Assert.Equal("Fixtures.TableCommands", catalog.DeclaringTypeNameOf(entry));
+                Assert.Null(cachedHandler.GetValue(entry));
+                (object first, object second) = catalog.GetHandlerPairOf(entry);
+                Assert.Same(first, second);
+                Assert.Same(first, cachedHandler.GetValue(entry));
+                Delegate handler = (Delegate)first;
+                Assert.Null(handler.Target);
+                Assert.True(handler.Method.IsStatic);
+                Assert.Equal("Command" + suffix, handler.Method.Name);
+                Assert.Equal("Fixtures.TableCommands", handler.Method.DeclaringType.FullName);
+                handler.DynamicInvoke(arguments);
+            }
+            int[] calls = (int[])assembly.GetType("Fixtures.TableCommands").GetField("Calls").GetValue(null);
+            Assert.All(calls, value => Assert.Equal(1, value));
+        }
+
         [Theory]
         [InlineData(1)]
         [InlineData(64)]

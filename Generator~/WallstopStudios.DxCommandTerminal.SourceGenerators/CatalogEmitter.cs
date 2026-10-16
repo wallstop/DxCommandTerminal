@@ -200,10 +200,7 @@
                         .AppendLine(" entries)");
                     builder.Append(Indent3).AppendLine("{");
                     int end = Math.Min(start + EntriesPerMethod, commandCount);
-                    for (int index = start; index < end; index++)
-                    {
-                        EmitCommand(builder, index, commands[index], holderIndicesByCommand[index], sharedMetadata[index], indexedSlots[index]);
-                    }
+                    EmitCommandRange(builder, start, end, commands, holderIndicesByCommand, sharedMetadata, indexedSlots);
                     builder.Append(Indent3).AppendLine("}");
                 }
             }
@@ -279,6 +276,72 @@
             builder.AppendLine();
             builder.AppendLine("namespace WallstopStudios.DxCommandTerminal.Generated");
             builder.AppendLine("{");
+        }
+
+        private static void EmitCommandRange(
+            StringBuilder builder,
+            int start,
+            int end,
+            List<CommandModel> commands,
+            int[] holderIndices,
+            int?[] sharedMetadata,
+            int?[] indexedSlots
+        )
+        {
+            int index = start;
+            while (index < end)
+            {
+                int next = index + 1;
+                if (sharedMetadata[index].HasValue && indexedSlots[index].HasValue && commands[index].Help == null && commands[index].Hint == null)
+                {
+                    while (
+                        next < end
+                        && sharedMetadata[next] == sharedMetadata[index]
+                        && indexedSlots[next] == indexedSlots[index].Value + next - index
+                        && commands[next].Help == null
+                        && commands[next].Hint == null
+                    )
+                    {
+                        next++;
+                    }
+                }
+                if (16 <= next - index)
+                {
+                    builder.AppendLine();
+                    builder.Append(Indent4).AppendLine("{");
+                    builder.Append(Indent5).AppendLine("string[] metadata = new string[]");
+                    builder.Append(Indent5).AppendLine("{");
+                    for (int item = index; item < next; item++)
+                    {
+                        CommandModel command = commands[item];
+                        AppendLiteral(builder, command.CommandName, Indent6);
+                        builder.AppendLine(",");
+                        AppendLiteral(builder, command.MethodName, Indent6);
+                        builder.AppendLine(",");
+                        AppendLiteral(builder, command.Help, Indent6);
+                        builder.AppendLine(",");
+                        AppendLiteral(builder, command.Hint, Indent6);
+                        builder.AppendLine(",");
+                    }
+                    builder.Append(Indent5).AppendLine("};");
+                    builder.Append(Indent5).AppendLine("for (int offset = 0; offset < metadata.Length; offset += 4)");
+                    builder.Append(Indent5).AppendLine("{");
+                    builder.Append(Indent6).Append("entries.Add(CreateEntry").Append(sharedMetadata[index].Value.ToString(CultureInfo.InvariantCulture));
+                    builder.Append("(metadata[offset], metadata[offset + 1], metadata[offset + 2], metadata[offset + 3], ");
+                    builder.Append(indexedSlots[index].Value.ToString(CultureInfo.InvariantCulture)).AppendLine(" + offset / 4));");
+                    builder.Append(Indent5).AppendLine("}");
+                    builder.Append(Indent4).AppendLine("}");
+                    index = next;
+                }
+                else
+                {
+                    while (index < next)
+                    {
+                        EmitCommand(builder, index, commands[index], holderIndices[index], sharedMetadata[index], indexedSlots[index]);
+                        index++;
+                    }
+                }
+            }
         }
 
         private static void EmitCommand(StringBuilder builder, int commandIndex, CommandModel command, int holderIndex, int? sharedMetadataIndex, int? indexedSlot)
