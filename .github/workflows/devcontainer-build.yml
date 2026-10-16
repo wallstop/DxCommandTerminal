@@ -19,11 +19,13 @@ on:
       - master
       - main
     paths:
+      - "global.json"
       - ".devcontainer/**"
       - "tooling~/package.json"
       - ".github/workflows/devcontainer-build.yml"
   pull_request:
     paths:
+      - "global.json"
       - ".devcontainer/**"
       - "tooling~/package.json"
       - ".github/workflows/devcontainer-build.yml"
