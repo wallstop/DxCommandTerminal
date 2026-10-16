@@ -96,6 +96,8 @@ class ResolverTests(unittest.TestCase):
                 self.assertLess(installer.version_sort_key(lower), installer.version_sort_key(higher))
         # A non-numeric component reads as zero, the same on both sides.
         self.assertEqual(installer.version_sort_key("2.0.x"), installer.version_sort_key("2.0.0"))
+        # isdigit alone would accept "1²" and int() would raise.
+        self.assertEqual(installer.version_sort_key("2.0.1²"), installer.version_sort_key("2.0.0"))
 
 
 class CommandVersionTests(unittest.TestCase):
@@ -108,6 +110,14 @@ class CommandVersionTests(unittest.TestCase):
                 with mock.patch.object(installer, "run", return_value=result) as run:
                     self.assertEqual(installer.command_version("opencode"), expected)
                 self.assertEqual(run.call_args.args[0], ["opencode", "--version"])
+
+    def test_non_utf8_cli_output_does_not_abort(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            stub = Path(directory) / "opencode"
+            stub.write_bytes(b"#!/bin/bash\nprintf '\\xff\\xfe bad opencode v2.0.16\\n'\n")
+            stub.chmod(0o755)
+            with mock.patch.dict(os.environ, {"PATH": f"{directory}:/usr/bin:/bin"}):
+                self.assertEqual(installer.command_version("opencode"), "2.0.16")
 
     def test_empty_answers(self) -> None:
         empty = subprocess.CompletedProcess([], 0, stdout="opencode rocks\n", stderr="")

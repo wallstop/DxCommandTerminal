@@ -123,7 +123,7 @@ chmod +x "${WORK_DIR}/delegation/npm"
 ln -sf "$(command -v python3)" "${WORK_DIR}/delegation/python3"
 ln -sf "$(command -v dirname)" "${WORK_DIR}/delegation/dirname"
 delegation_out="$(PATH="${WORK_DIR}/delegation" HOME="${WORK_DIR}/home" TMPDIR="${WORK_DIR}" \
-    NPM_CONFIG_PREFIX= /bin/bash "${INSTALLER}" 2>&1 || true)"
+    NPM_CONFIG_PREFIX= BASH_ENV= /bin/bash "${INSTALLER}" 2>&1 || true)"
 grep -Fq "5 agent CLI refresh(es) failed" <<<"${delegation_out}" \
     || fail "the delegator did not run the installer to its failure summary: ${delegation_out}"
 assert_contains "${DOCKERFILE}" 'WORKDIR /workspaces/package'

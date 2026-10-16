@@ -37,7 +37,9 @@ def run(command: list[str], timeout: float | None = None) -> subprocess.Complete
     # A timed-out or unlaunchable command reads as a failed attempt, the way
     # the timeout(1) calls this port replaced did.
     try:
-        return subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        # Non-UTF-8 bytes from a third-party CLI must not abort the refresh.
+        return subprocess.run(command, capture_output=True, text=True, errors="replace",
+                              timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
         return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
 
@@ -51,8 +53,10 @@ def command_version(command_name: str) -> str:
 
 def version_sort_key(version: str) -> tuple[int, ...]:
     # A non-numeric component reads as zero, mirroring the jq filter this port
-    # replaced: "2.0.16-beta" sorts below "2.0.16".
-    return tuple(int(part) if part.isdigit() else 0 for part in version.split(".")[:3])
+    # replaced: "2.0.16-beta" sorts below "2.0.16". isascii keeps unicode
+    # digits (isdigit accepts "1²") out of int().
+    return tuple(int(part) if part.isascii() and part.isdigit() else 0
+                 for part in version.split(".")[:3])
 
 
 def resolve_latest_version(package_spec: str) -> str:
@@ -65,9 +69,11 @@ def resolve_latest_version(package_spec: str) -> str:
         return ""
     try:
         payload = json.loads(result.stdout)
-    except ValueError:
+    except (ValueError, RecursionError):
         return ""
     if isinstance(payload, list):
+        # jq 1.6 failed the whole answer when any entry was not a string; the
+        # port salvages the valid strings instead.
         entries = [entry for entry in payload if isinstance(entry, str)]
     elif isinstance(payload, str):
         entries = [payload]
