@@ -15,8 +15,90 @@ import { createCacheContext, createCacheKeyComputer, isCacheableCheck, readCache
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
+/*
+    The node suite (CI's `npm --prefix tooling~ test` glob pair) split into
+    two gates with honest per-file input enumeration (#307). CI keeps the
+    full globs, so coverage does not move; locally a C# edit skips the
+    tooling-keyed half and a tooling-only edit skips the tree-keyed half.
+    Assignment rule: a file whose read surface reaches outside tooling~
+    goes in the tree-keyed half - worst case it re-runs, and a stale pass
+    is the hazard that matters.
+ */
+export const NODE_TEST_SPLITS = {
+  /*
+      Inputs ⊆ tooling~ ∪ .github/workflows ∪ .llm: the mcp tests drive
+      unity-mcp.mjs against temp trees, the release/versioning/t11/lint
+      tests import scripts under tooling~ and point linter roots at temp
+      fixtures, publish-release/docs-pages/generator-workflow read workflow
+      YAML, and python-entries runs the typed-python linters over the live
+      .llm tree through uv. Keys: tooling~ (scripts, fixtures, manifest),
+      the workflow files, .llm, the bash shim two members execute snippets
+      with, and the uv runtime python-entries resolves through.
+   */
+  "node-tests-tooling": [
+    "tooling~/scripts/mcp/__tests__/bridge-port.test.mjs",
+    "tooling~/scripts/mcp/__tests__/client-configs.test.mjs",
+    "tooling~/scripts/mcp/__tests__/dotenv.test.mjs",
+    "tooling~/scripts/mcp/__tests__/env-and-capture.test.mjs",
+    "tooling~/scripts/mcp/__tests__/ports.test.mjs",
+    "tooling~/scripts/mcp/__tests__/tests-command.test.mjs",
+    "tooling~/scripts/tests/docs-pages.test.mjs",
+    "tooling~/scripts/tests/export-unitypackage.test.mjs",
+    "tooling~/scripts/tests/export-unitypackage-cache.test.mjs",
+    "tooling~/scripts/tests/generator-workflow.test.mjs",
+    "tooling~/scripts/tests/import-drill.test.mjs",
+    "tooling~/scripts/tests/lint-blocking-waits.test.mjs",
+    "tooling~/scripts/tests/lint-comparison-direction.test.mjs",
+    "tooling~/scripts/tests/lint-docs-catalog.test.mjs",
+    "tooling~/scripts/tests/lint-linq-production.test.mjs",
+    "tooling~/scripts/tests/lint-multiline-comments.test.mjs",
+    "tooling~/scripts/tests/lint-out-param-discipline.test.mjs",
+    "tooling~/scripts/tests/lint-pr-copy.test.mjs",
+    "tooling~/scripts/tests/lint-string-equality.test.mjs",
+    "tooling~/scripts/tests/lint-unity-null-patterns.test.mjs",
+    "tooling~/scripts/tests/prepare-release.test.mjs",
+    "tooling~/scripts/tests/publish-release.test.mjs",
+    "tooling~/scripts/tests/python-entries.test.mjs",
+    "tooling~/scripts/tests/t11-comparator.test.mjs",
+    "tooling~/scripts/tests/t11-commands.test.mjs",
+    "tooling~/scripts/tests/t4-capture.test.mjs",
+    "tooling~/scripts/tests/t7-consumer-drill.test.mjs",
+    "tooling~/scripts/tests/versioning.test.mjs"
+  ],
+  /*
+      Inputs reach the live root trees: the lint sweeps and display-text
+      walk Runtime/Editor/Tests/Generator~/Packs/Styles/Samples~, t13 and
+      export-unitypackage-real read the packaged allowlist plus the mcp
+      capture sources, analyzer-placement hunts stray payload copies from
+      the repo root down (Media/ and progress/ included), and
+      preflight.test reads .config and tooling~/compat. Keys: every walked
+      root plus the tooling~ scripts and fixtures those members import.
+      Stated coin: a NEW repo-root loose file named exactly like an
+      analyzer payload (the stray hunt's only root-level input class)
+      defeats the key until the next keyed edit.
+   */
+  "node-tests-csharp": [
+    "tooling~/scripts/tests/analyzer-placement.test.mjs",
+    "tooling~/scripts/tests/display-text.test.mjs",
+    "tooling~/scripts/tests/export-unitypackage-real.test.mjs",
+    "tooling~/scripts/tests/lint-exception-tostring.test.mjs",
+    "tooling~/scripts/tests/lint-member-ordering.test.mjs",
+    "tooling~/scripts/tests/lint-minimal-comments.test.mjs",
+    "tooling~/scripts/tests/lint-theme-palette-tokens.test.mjs",
+    "tooling~/scripts/tests/preflight.test.mjs",
+    "tooling~/scripts/tests/t13-compatibility-fixtures.test.mjs"
+  ]
+};
+
 /** The default gate set. Names are stable identifiers used by --skip. */
 export function buildChecks() {
+  const nodeTestsCheck = (name, cachePaths, extra = {}) => ({
+    name,
+    command: `node --test ${NODE_TEST_SPLITS[name].map((file) => `"${file}"`).join(" ")}`,
+    cacheRuntimeEnvironment: true,
+    cachePaths,
+    ...extra
+  });
   const csharpCheck = (name, command, script, roots, cacheEnvironment) => ({
     name,
     command,
@@ -43,17 +125,57 @@ export function buildChecks() {
     ]
   });
   return [
-    {
-      name: "node-tests",
-      command:
-        'node --test "tooling~/scripts/mcp/__tests__/*.test.mjs" "tooling~/scripts/tests/*.test.mjs"',
-      /*
-          External PowerShell/Python configuration prevents safe cache reuse.
-          Fixtures stay outside other gates' inputs, so keying can overlap.
-       */
-      cache: false,
-      startBeforeCache: true
-    },
+    nodeTestsCheck(
+      "node-tests-tooling",
+      ["tooling~", ".github/workflows", ".llm"],
+      {
+        /*
+            python-entries resolves the typed-python linters through uv, and
+            publish-release/generator-workflow execute workflow snippets
+            through bash - both runtimes join the key the same way npm and
+            git do for the checks that spawn them.
+         */
+        cacheUv: true,
+        cacheBash: true
+      }
+    ),
+    nodeTestsCheck("node-tests-csharp", [
+      "Runtime",
+      "Editor",
+      "Tests",
+      "Generator~",
+      "Packs",
+      "Styles",
+      "Fonts",
+      "Samples~",
+      "Media",
+      "progress",
+      "package.json",
+      "package.json.meta",
+      "CHANGELOG.md",
+      "CHANGELOG.md.meta",
+      "LICENSE",
+      "LICENSE.meta",
+      "README.md",
+      "README.md.meta",
+      ".config",
+      ".npmignore",
+      ".gitignore",
+      "tooling~/compat",
+      "tooling~/scripts/release",
+      "tooling~/scripts/t13",
+      "tooling~/scripts/tests/support",
+      "tooling~/scripts/preflight.mjs",
+      "tooling~/scripts/preflight-cache.mjs",
+      "tooling~/scripts/lint-comparison-direction.mjs",
+      "tooling~/scripts/lint-exception-tostring.mjs",
+      "tooling~/scripts/lint-member-ordering.mjs",
+      "tooling~/scripts/lint-minimal-comments.mjs",
+      "tooling~/scripts/lint-theme-palette-tokens.mjs",
+      "tooling~/scripts/lib",
+      "tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt",
+      "tooling~/scripts/mcp/DxTerminalTestRunReporter.cs.txt"
+    ]),
     {
       /*
           The player-tooling python suites CI runs in tooling-tests.yml,

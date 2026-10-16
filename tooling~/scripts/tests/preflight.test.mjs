@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const toolingRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const preflightPath = path.join(toolingRoot, "scripts", "preflight.mjs");
-const { buildChecks, parseSkip, parseOnly, runChecks, main } = await import(
+const { buildChecks, parseSkip, parseOnly, runChecks, main, NODE_TEST_SPLITS } = await import(
   pathToFileURL(preflightPath).href
 );
 const {
@@ -112,7 +112,8 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     assert.ok(check.command.trim().length > 0, `${check.name} needs a command`);
   }
   const expected = [
-    "node-tests",
+    "node-tests-tooling",
+    "node-tests-csharp",
     "t11-check",
     "package-validate",
     "docs-guides",
@@ -212,15 +213,108 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   assert.equal(packageCheck.cacheGitConfig, true);
   assert.equal(packageCheck.cacheRuntimeEnvironment, true);
   assert.ok(packageCheck.cachePaths.includes(".npmignore"));
-  const nodeCheck = checks.find((check) => check.name === "node-tests");
-  assert.equal(nodeCheck.cache, false);
-  assert.equal(nodeCheck.startBeforeCache, true);
-  assert.equal(nodeCheck.command, 'node --test "tooling~/scripts/mcp/__tests__/*.test.mjs" "tooling~/scripts/tests/*.test.mjs"');
+  const toolingCheck = checks.find((check) => check.name === "node-tests-tooling");
+  const csharpCheck = checks.find((check) => check.name === "node-tests-csharp");
+  for (const gate of [toolingCheck, csharpCheck]) {
+    assert.notEqual(gate.cache, false, `${gate.name} must be cacheable`);
+    assert.equal(gate.startBeforeCache, undefined, `${gate.name} keys before running`);
+    assert.equal(gate.cacheRuntimeEnvironment, true);
+  }
+  assert.deepEqual(toolingCheck.cachePaths, ["tooling~", ".github/workflows", ".llm"]);
+  assert.equal(toolingCheck.cacheUv, true, "python-entries resolves the linters through uv");
+  assert.equal(toolingCheck.cacheBash, true, "workflow snippets execute through bash");
+  assert.equal(csharpCheck.cacheUv, undefined, "no tree-keyed member spawns uv");
+  assert.deepEqual(csharpCheck.cachePaths, [
+    "Runtime",
+    "Editor",
+    "Tests",
+    "Generator~",
+    "Packs",
+    "Styles",
+    "Fonts",
+    "Samples~",
+    "Media",
+    "progress",
+    "package.json",
+    "package.json.meta",
+    "CHANGELOG.md",
+    "CHANGELOG.md.meta",
+    "LICENSE",
+    "LICENSE.meta",
+    "README.md",
+    "README.md.meta",
+    ".config",
+    ".npmignore",
+    ".gitignore",
+    "tooling~/compat",
+    "tooling~/scripts/release",
+    "tooling~/scripts/t13",
+    "tooling~/scripts/tests/support",
+    "tooling~/scripts/preflight.mjs",
+    "tooling~/scripts/preflight-cache.mjs",
+    "tooling~/scripts/lint-comparison-direction.mjs",
+    "tooling~/scripts/lint-exception-tostring.mjs",
+    "tooling~/scripts/lint-member-ordering.mjs",
+    "tooling~/scripts/lint-minimal-comments.mjs",
+    "tooling~/scripts/lint-theme-palette-tokens.mjs",
+    "tooling~/scripts/lib",
+    "tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt",
+    "tooling~/scripts/mcp/DxTerminalTestRunReporter.cs.txt"
+  ]);
   const docsCheck = checks.find((check) => check.name === "docs-guides");
   assert.equal(docsCheck.cacheDotnetTool, true);
   assert.equal(docsCheck.cacheDocsApi, true);
   assert.ok(docsCheck.cachePaths.includes("tooling~/docs/toc.yml"));
   assert.equal(docsCheck.cacheEnvironment, undefined);
+});
+
+test("node suite split: every suite file is assigned to exactly one gate", () => {
+  const suiteDirectories = ["scripts/mcp/__tests__", "scripts/tests"];
+  const onDisk = suiteDirectories.flatMap((directory) =>
+    fs
+      .readdirSync(path.join(toolingRoot, directory))
+      .filter((name) => name.endsWith(".test.mjs"))
+      .map((name) => `tooling~/${directory}/${name}`)
+  );
+  const assigned = Object.values(NODE_TEST_SPLITS).flat();
+  assert.deepEqual(
+    [...assigned].sort(),
+    [...new Set(onDisk)].sort(),
+    "the splits must enumerate exactly the files CI's globs run - a new suite file failing here must be assigned to a gate"
+  );
+  const seen = new Set();
+  for (const [name, files] of Object.entries(NODE_TEST_SPLITS)) {
+    for (const file of files) {
+      assert.ok(!seen.has(file), `${file} is assigned to more than one gate`);
+      seen.add(file);
+    }
+    const check = buildChecks().find((candidate) => candidate.name === name);
+    const commandFiles = [...check.command.matchAll(/"([^"]+\.test\.mjs)"/gu)].map((match) => match[1]);
+    assert.deepEqual(commandFiles, files, `${name}'s command must run exactly its split`);
+  }
+});
+
+test("cacheUv folds the uv runtime into the key only for checks that declare it", () => {
+  const base = { name: "uv-gate", command: "node probe.mjs" };
+  const withUv = { ...base, cacheUv: true };
+  const context = createCacheContext();
+  const keyOf = (check, uv, uvExecutable) =>
+    cacheKeyForCheck(check, { ...context, uv, uvExecutable });
+  assert.notEqual(
+    keyOf(withUv, "uv 1.0", "state-a"),
+    keyOf(withUv, "uv 2.0", "state-a"),
+    "a uv upgrade must move the key"
+  );
+  assert.notEqual(
+    keyOf(withUv, "uv 1.0", "state-a"),
+    keyOf(withUv, "uv 1.0", "state-b"),
+    "a uv executable move must move the key"
+  );
+  assert.equal(
+    keyOf(base, "uv 1.0", "state-a"),
+    keyOf(base, "uv 2.0", "state-b"),
+    "a check that never spawns uv must not key it"
+  );
 });
 
 const skipCases = [
@@ -432,7 +526,7 @@ test("main: unknown --only name throws before spawning", async () => {
 });
 
 test("main: --skip and --only are mutually exclusive", async () => {
-  await assert.rejects(() => main(["--skip=node-tests", "--only=node-tests"]), /mutually exclusive/);
+  await assert.rejects(() => main(["--skip=t11-check", "--only=t11-check"]), /mutually exclusive/);
 });
 
 test("main: --only runs just the selected checks", async () => {
@@ -1459,7 +1553,7 @@ test("main: uncached integration checks reject stale passes after environment ch
     fs.appendFileSync(${JSON.stringify(marker)}, "x");
     process.exit(process.env.UV_PROJECT_ENVIRONMENT === "broken-environment" ? 1 : 0);
   `);
-  const check = { ...buildChecks().find((candidate) => candidate.name === "node-tests"), command: `node "${subject}"` };
+  const check = { ...buildChecks().find((candidate) => candidate.name === "python-tests"), command: `node "${subject}"` };
   const originalCi = process.env.CI;
   const originalEnvironment = process.env.UV_PROJECT_ENVIRONMENT;
   const originalLog = console.log;
@@ -1481,7 +1575,7 @@ test("main: uncached integration checks reject stale passes after environment ch
     process.env.UV_PROJECT_ENVIRONMENT = "broken-environment";
     assert.equal(await main([], [check]), 1, "surface the changed child outcome");
     assert.equal(fs.readFileSync(marker, "utf8"), "xxx");
-    assert.ok(!lines.some((line) => line.includes("cached node-tests")));
+    assert.ok(!lines.some((line) => line.includes("cached python-tests")));
   } finally {
     if (key !== undefined) clearCacheForCheck(check, key);
     console.log = originalLog;
