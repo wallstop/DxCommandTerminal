@@ -127,7 +127,9 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     assert.ok(names.includes(name), `expected check '${name}' in the default set`);
   }
   for (const check of checks) {
-    assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
+    if (check.cache !== false) {
+      assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
+    }
   }
   const compatCheck = checks.find((check) => check.name === "compat-check");
   assert.equal(compatCheck.lane, undefined, "no check shares build state anymore; every check owns a lane");
@@ -211,12 +213,9 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   assert.equal(packageCheck.cacheRuntimeEnvironment, true);
   assert.ok(packageCheck.cachePaths.includes(".npmignore"));
   const nodeCheck = checks.find((check) => check.name === "node-tests");
-  assert.equal(nodeCheck.cacheTrackedFiles, true);
-  assert.equal(nodeCheck.cacheDependencies, true);
-  assert.equal(nodeCheck.cacheGzip, true);
-  assert.equal(nodeCheck.cacheBash, true);
-  assert.deepEqual(nodeCheck.cacheEnvironment, ["BASH_ENV"]);
-  assert.ok(nodeCheck.cacheExcludes.includes("tooling~/scripts/.preflight-cache"));
+  assert.equal(nodeCheck.cache, false);
+  assert.equal(nodeCheck.startBeforeCache, true);
+  assert.equal(nodeCheck.command, 'node --test "tooling~/scripts/mcp/__tests__/*.test.mjs" "tooling~/scripts/tests/*.test.mjs"');
   const docsCheck = checks.find((check) => check.name === "docs-guides");
   assert.equal(docsCheck.cacheDotnetTool, true);
   assert.equal(docsCheck.cacheDocsApi, true);
@@ -1008,6 +1007,14 @@ test("the markdown gate keys its own files, not the whole snapshot", () => {
   );
   assert.equal(mdCheck.cacheTrackedFiles, undefined, "the whole-snapshot key would re-run the gate on any edit");
   assert.equal(mdCheck.cacheDependencies, true, "prettier runs from node_modules; its tree must key the gate");
+  const context = {
+    node: "node", platform: process.platform, arch: process.arch, files: [],
+    dependencies: "dependencies", git: "git-version", gitExecutable: "git-bytes", gitConfig: "git-config"
+  };
+  const original = cacheKeyForCheck(mdCheck, context);
+  for (const input of ["git", "gitExecutable", "gitConfig"]) {
+    assert.notEqual(original, cacheKeyForCheck(mdCheck, { ...context, [input]: "changed" }), `markdown must key ${input}`);
+  }
 });
 
 test("the run's key computer answers the live key and moves with its inputs", () => {
@@ -1367,6 +1374,104 @@ test("main: caches successful checks and --no-cache bypasses the cache", async (
       process.env.CI = originalCi;
     }
     fs.rmSync(path.dirname(marker), { recursive: true, force: true });
+  }
+});
+
+test("main: uncached integration checks reject stale passes after environment changes", async () => {
+  const marker = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-uncached-")), "count");
+  tempDirs.push(path.dirname(marker));
+  const subject = writeTempScript(`
+    import fs from "node:fs";
+    fs.appendFileSync(${JSON.stringify(marker)}, "x");
+    process.exit(process.env.UV_PROJECT_ENVIRONMENT === "broken-environment" ? 1 : 0);
+  `);
+  const check = { ...buildChecks().find((candidate) => candidate.name === "node-tests"), command: `node "${subject}"` };
+  const originalCi = process.env.CI;
+  const originalEnvironment = process.env.UV_PROJECT_ENVIRONMENT;
+  const originalLog = console.log;
+  const originalError = console.error;
+  const lines = [];
+  delete process.env.CI;
+  delete process.env.UV_PROJECT_ENVIRONMENT;
+  console.log = console.error = (line) => lines.push(String(line));
+  let key;
+  try {
+    key = cacheKeyForCheck(check);
+    assert.equal(writeCacheEntry({ ...check, cache: true }, key), true, "seed a legacy pass");
+    assert.equal(readCacheEntry({ ...check, cache: true }, key), true);
+    assert.equal(readCacheEntry(check, key), false, "ignore the legacy pass");
+    assert.equal(writeCacheEntry(check, key), false, "never save an integration pass");
+    assert.equal(await main([], [check]), 0);
+    assert.equal(await main([], [check]), 0);
+    assert.equal(fs.readFileSync(marker, "utf8"), "xx", "both calls execute the child");
+    process.env.UV_PROJECT_ENVIRONMENT = "broken-environment";
+    assert.equal(await main([], [check]), 1, "surface the changed child outcome");
+    assert.equal(fs.readFileSync(marker, "utf8"), "xxx");
+    assert.ok(!lines.some((line) => line.includes("cached node-tests")));
+  } finally {
+    if (key !== undefined) clearCacheForCheck(check, key);
+    console.log = originalLog;
+    console.error = originalError;
+    if (originalCi === undefined) delete process.env.CI;
+    else process.env.CI = originalCi;
+    if (originalEnvironment === undefined) delete process.env.UV_PROJECT_ENVIRONMENT;
+    else process.env.UV_PROJECT_ENVIRONMENT = originalEnvironment;
+  }
+});
+
+test("main: early checks overlap cache inspection and both groups report failures", async () => {
+  for (const failingGroup of ["early", "keyed"]) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-early-"));
+    tempDirs.push(directory);
+    const started = path.join(directory, "started");
+    const finished = path.join(directory, "finished");
+    const early = writeTempScript(`
+      import fs from "node:fs";
+      fs.writeFileSync(${JSON.stringify(started)}, "started");
+      process.exit(${failingGroup === "early" ? 1 : 0});
+    `);
+    const keyed = writeTempScript(`
+      import fs from "node:fs";
+      fs.writeFileSync(${JSON.stringify(finished)}, "finished");
+      process.exit(${failingGroup === "keyed" ? 1 : 0});
+    `);
+    const probe = writeTempScript(`
+      import fs from "node:fs";
+      const deadline = Date.now() + 5000;
+      const signal = new Int32Array(new SharedArrayBuffer(4));
+      while (!fs.existsSync(${JSON.stringify(started)}) && Date.now() < deadline) Atomics.wait(signal, 0, 0, 10);
+      process.exit(fs.existsSync(${JSON.stringify(started)}) ? 0 : 1);
+    `);
+    let observedStart = false;
+    let inspected = false;
+    const check = {
+      name: "key-inspection",
+      command: `node "${keyed}"`,
+      get cachePaths() {
+        if (!inspected) {
+          inspected = true;
+          try {
+            execFileSync(process.execPath, [probe]);
+            observedStart = true;
+          } catch { /* Report ordering through the assertion after main settles. */ }
+        }
+        return [];
+      }
+    };
+    const originalCi = process.env.CI;
+    delete process.env.CI;
+    try {
+      assert.equal(await main([], [
+        { name: "early-start", command: `node "${early}"`, cache: false, startBeforeCache: true },
+        check
+      ]), 1, `report the ${failingGroup} failure`);
+      assert.ok(observedStart, "the early child must start before cached inputs are inspected");
+      assert.ok(fs.existsSync(finished), "await the keyed child even when the early child fails");
+    } finally {
+      clearCacheForCheck(check, cacheKeyForCheck(check));
+      if (originalCi === undefined) delete process.env.CI;
+      else process.env.CI = originalCi;
+    }
   }
 });
 
