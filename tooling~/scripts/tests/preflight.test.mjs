@@ -1007,6 +1007,14 @@ test("the markdown gate keys its own files, not the whole snapshot", () => {
   );
   assert.equal(mdCheck.cacheTrackedFiles, undefined, "the whole-snapshot key would re-run the gate on any edit");
   assert.equal(mdCheck.cacheDependencies, true, "prettier runs from node_modules; its tree must key the gate");
+  const context = {
+    node: "node", platform: process.platform, arch: process.arch, files: [],
+    dependencies: "dependencies", git: "git-version", gitExecutable: "git-bytes", gitConfig: "git-config"
+  };
+  const original = cacheKeyForCheck(mdCheck, context);
+  for (const input of ["git", "gitExecutable", "gitConfig"]) {
+    assert.notEqual(original, cacheKeyForCheck(mdCheck, { ...context, [input]: "changed" }), `markdown must key ${input}`);
+  }
 });
 
 test("the run's key computer answers the live key and moves with its inputs", () => {

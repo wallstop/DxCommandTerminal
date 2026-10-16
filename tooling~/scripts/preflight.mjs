@@ -312,6 +312,8 @@ export function buildChecks() {
        */
       name: "lint-md-format",
       command: "node tooling~/scripts/lint-md-format.mjs",
+      cacheGit: true,
+      cacheGitConfig: true,
       cacheTrackedPaths: ["*.md", ":!.llm/skills/index.md", ".prettierrc.json", ".editorconfig"],
       cacheDependencies: true,
       cacheRuntimeEnvironment: true,
