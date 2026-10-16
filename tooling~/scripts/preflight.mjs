@@ -1,10 +1,11 @@
 /*
     Runs all Unity-free local gates concurrently. Commands match CI without
     npm wrapper startup. Successful checks cache their declared inputs;
-    external-runtime integration tests always run.
+    external-runtime integration tests always run. --only=name1,name2 runs
+    just those gates; --skip=name1,name2 runs everything but them.
 
-    Usage: node tooling~/scripts/preflight.mjs [--skip=name1,name2] [--no-cache]
-    Exit 1 on a failed check, an empty selection, or an unknown skip name.
+    Usage: node tooling~/scripts/preflight.mjs [--only=a,b] [--skip=a,b] [--no-cache]
+    Exit 1 on a failed check, an empty selection, or an unknown name.
     Shell commands resolve Windows shims the same way CI does.
 */
 import { spawn } from "node:child_process";
@@ -52,6 +53,26 @@ export function buildChecks() {
        */
       cache: false,
       startBeforeCache: true
+    },
+    {
+      /*
+          The player-tooling python suites CI runs in tooling-tests.yml,
+          in CI's order. Not cached: the suites build their own fixture
+          trees and finish in seconds, so a key saves nothing worth its
+          staleness. Local selection mirrors the CI steps so a tooling
+          change fails here first, not in a pushed branch's CI run.
+       */
+      name: "python-tests",
+      cache: false,
+      startBeforeCache: true,
+      command: [
+        "test_verify_opencode.py",
+        "test_player_smoke.py",
+        "test_player_readiness.py",
+        "test_webgl_player.py"
+      ]
+        .map((pattern) => `${process.platform === "win32" ? "python" : "python3"} -m unittest discover -s tooling~/scripts/tests -p ${pattern}`)
+        .join(" && ")
     },
     {
       name: "t11-check",
@@ -398,19 +419,19 @@ function runOne(check) {
   });
 }
 
-/** Extracts the --skip value (accepts `--skip=a,b` and `--skip a,b`). */
-export function parseSkip(argv, knownNames) {
+/** Extracts a comma-separated name list for `--skip` / `--only`. */
+function parseNameList(argv, flag, knownNames) {
   let raw = "";
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--skip") {
+    if (argv[i] === flag) {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith("--")) {
-        throw new Error("--skip requires a comma-separated name list");
+        throw new Error(`${flag} requires a comma-separated name list`);
       }
       raw = value;
       i++;
-    } else if (argv[i].startsWith("--skip=")) {
-      raw = argv[i].slice("--skip=".length);
+    } else if (argv[i].startsWith(`${flag}=`)) {
+      raw = argv[i].slice(flag.length + 1);
     }
   }
   const names = raw
@@ -419,15 +440,30 @@ export function parseSkip(argv, knownNames) {
     .filter((name) => name.length > 0);
   for (const name of names) {
     if (!knownNames.includes(name)) {
-      throw new Error(`unknown --skip name '${name}' (known: ${knownNames.join(", ")})`);
+      throw new Error(`unknown ${flag} name '${name}' (known: ${knownNames.join(", ")})`);
     }
   }
   return names;
 }
 
+/** Extracts the --skip value (accepts `--skip=a,b` and `--skip a,b`). */
+export function parseSkip(argv, knownNames) {
+  return parseNameList(argv, "--skip", knownNames);
+}
+
+/** Extracts the --only value; the selection complement of --skip. */
+export function parseOnly(argv, knownNames) {
+  return parseNameList(argv, "--only", knownNames);
+}
+
 export async function main(argv = process.argv.slice(2), checks = buildChecks()) {
-  const skip = parseSkip(argv, checks.map((check) => check.name));
-  const selected = checks.filter((check) => !skip.includes(check.name));
+  const knownNames = checks.map((check) => check.name);
+  const skip = parseSkip(argv, knownNames);
+  const only = parseOnly(argv, knownNames);
+  if (skip.length > 0 && only.length > 0) {
+    throw new Error("--skip and --only are mutually exclusive");
+  }
+  const selected = checks.filter((check) => (only.length > 0 ? only.includes(check.name) : !skip.includes(check.name)));
   if (selected.length === 0) {
     console.error("[preflight] no checks to run; refusing to scan nothing");
     return 1;
