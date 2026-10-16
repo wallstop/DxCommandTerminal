@@ -62,26 +62,19 @@ export function buildChecks() {
           staleness. Local selection mirrors the CI steps so a tooling
           change fails here first, not in a pushed branch's CI run.
 
-          One interpreter in module mode instead of one `unittest discover`
-          per suite: same 38 tests, but a single start and a single path
-          resolution instead of four (measured 4.1 s -> 1.0 s here, more
-          under preflight's parallel load). Discovery's pattern is fnmatch,
-          not regex, so an alternation pattern would silently match zero
-          files - module names are the honest way to fuse the runs.
+          One interpreter for all four suites (CI keeps one discover step
+          each): measured 4.1 s -> 1.0 s standalone here, more saved under
+          preflight's parallel load. unittest aggregates the module list
+          without failing between suites, and any suite failure still
+          fails the gate's exit code. The cwd option hosts the suites'
+          own directory; a shell `cd` would make this gate the only one
+          parsing a tilde path through cmd.exe on Windows.
        */
       name: "python-tests",
       cache: false,
       startBeforeCache: true,
-      command:
-        "cd tooling~/scripts/tests && "
-        + [
-          "test_verify_opencode",
-          "test_player_smoke",
-          "test_player_readiness",
-          "test_webgl_player"
-        ]
-          .map((module) => `${process.platform === "win32" ? "python" : "python3"} -m unittest ${module}`)
-          .join(" && ")
+      cwd: "tooling~/scripts/tests",
+      command: `${process.platform === "win32" ? "python" : "python3"} -m unittest test_verify_opencode test_player_smoke test_player_readiness test_webgl_player`
     },
     {
       name: "t11-check",
@@ -397,7 +390,7 @@ function runOne(check) {
     const startedAt = Date.now();
     const child = spawn(check.command, {
       shell: true,
-      cwd: REPO_ROOT,
+      cwd: check.cwd ? path.resolve(REPO_ROOT, check.cwd) : REPO_ROOT,
       stdio: ["ignore", "pipe", "pipe"]
     });
     let output = "";
