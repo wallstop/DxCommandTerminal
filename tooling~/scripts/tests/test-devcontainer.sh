@@ -8,6 +8,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 VERIFY_SCRIPT="${REPO_ROOT}/.devcontainer/verify-opencode.sh"
 DOCKERFILE="${REPO_ROOT}/.devcontainer/Dockerfile"
 INSTALLER="${REPO_ROOT}/.devcontainer/install-agent-clis.sh"
+INSTALLER_PY="${REPO_ROOT}/.devcontainer/install_agent_clis.py"
 POST_START="${REPO_ROOT}/.devcontainer/post-start.sh"
 DEVCONTAINER="${REPO_ROOT}/.devcontainer/devcontainer.json"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dxt-devcontainer-test.XXXXXX")"
@@ -81,8 +82,8 @@ assert_contains "${POST_START}" 'unset BASH_ENV'
 assert_contains "${POST_START}" 'opencode service status'
 assert_contains "${POST_START}" 'opencode service restart'
 assert_contains "${POST_START}" 'Unauthorized'
-assert_contains "${INSTALLER}" 'version --json'
-if grep -Fq 'sort -V' "${INSTALLER}"; then
+assert_contains "${INSTALLER_PY}" '"version", "--json"'
+if grep -Fq 'sort -V' "${INSTALLER_PY}"; then
     fail "the npm range parser still sorts package-name-prefixed output"
 fi
 # Exercise the real resolver: `npm view <range> version` returns an array whose
@@ -93,14 +94,33 @@ cat >"${WORK_DIR}/registry/npm" <<'EOF'
 printf '%s\n' "${DXT_FAKE_NPM_VIEW:-[\"2.0.0\",\"2.0.16\",\"2.0.15\"]}"
 EOF
 chmod +x "${WORK_DIR}/registry/npm"
+DXT_INSTALLER_PY="${INSTALLER_PY}"
+export DXT_INSTALLER_PY
 resolve_version() {
     PATH="${WORK_DIR}/registry:/usr/bin:/bin" DXT_FAKE_NPM_VIEW="$1" \
-        bash -c 'source "$1"; resolve_latest_version "@opencode/cli@2"' _ "${INSTALLER}"
+        python3 -c 'import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("installer", os.environ["DXT_INSTALLER_PY"])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+sys.stdout.write(module.resolve_latest_version("@opencode/cli@2"))'
 }
 [[ "$(resolve_version '["2.0.0","2.0.16","2.0.15"]')" == "2.0.16" ]] \
     || fail "the resolver did not pick the highest version from an unordered array"
 [[ "$(resolve_version '"2.0.16"')" == "2.0.16" ]] \
     || fail "the resolver did not pass a single version through"
+
+# The tracked entry point must still run the refresh through its delegator. An
+# empty registry answer with no installed CLIs fails closed without any sleep.
+mkdir -p "${WORK_DIR}/delegation" "${WORK_DIR}/home"
+cat >"${WORK_DIR}/delegation/npm" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "${WORK_DIR}/delegation/npm"
+if PATH="${WORK_DIR}/delegation:/usr/bin:/bin" HOME="${WORK_DIR}/home" TMPDIR="${WORK_DIR}" \
+    bash "${INSTALLER}" >/dev/null 2>&1; then
+    fail "the delegator exited zero with an empty registry and no installed CLIs"
+fi
 assert_contains "${DOCKERFILE}" 'WORKDIR /workspaces/package'
 assert_contains "${DOCKERFILE}" 'COPY .devcontainer/verify-opencode.sh /tmp/verify-opencode.sh'
 assert_count "${DOCKERFILE}" 'bash /tmp/verify-opencode.sh' 2

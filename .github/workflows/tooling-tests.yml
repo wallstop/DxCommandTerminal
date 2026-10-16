@@ -151,6 +151,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: python -m unittest discover -s tooling~/scripts/tests -p test_install_env_autoload.py
 
+      - name: Test agent CLI installer
+        if: matrix.os == 'ubuntu-latest'
+        run: python -m unittest discover -s tooling~/scripts/tests -p test_install_agent_clis.py
+
       - name: Test devcontainer contract
         if: matrix.os == 'ubuntu-latest'
         run: bash tooling~/scripts/tests/test-devcontainer.sh

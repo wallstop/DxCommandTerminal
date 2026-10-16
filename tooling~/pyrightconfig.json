@@ -1,5 +1,5 @@
 {
-  "include": ["scripts", "../.devcontainer/verify_opencode.py", "../.devcontainer/install_env_autoload.py"],
+  "include": ["scripts", "../.devcontainer/verify_opencode.py", "../.devcontainer/install_env_autoload.py", "../.devcontainer/install_agent_clis.py"],
   "extraPaths": ["scripts", "scripts/t13"],
   "pythonVersion": "3.11",
   "pythonPlatform": "All",
