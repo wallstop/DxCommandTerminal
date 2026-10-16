@@ -26,7 +26,7 @@ class BrowserReportTests(unittest.TestCase):
         self.report: list[bytes] = []
         self.ready = threading.Event()
         self.server = webgl.report_server(Path(self.directory.name), "owner-token", self.report, self.ready)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         self.thread.start()
         self.addCleanup(self.close)
 
