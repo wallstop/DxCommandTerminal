@@ -1,6 +1,7 @@
 """Exercise the actual loopback report protocol without Unity or a browser dependency."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import http.client
 import importlib.util
 import json
@@ -91,10 +92,16 @@ class BrowserReportTests(unittest.TestCase):
             finally:
                 connection.close()
             return Mock(pid=42)
+        @contextmanager
+        def own_process(process):
+            try:
+                yield process
+            finally:
+                raise RuntimeError("cannot stop")
         try:
             with patch.object(webgl, "report_server", side_effect=open_server), patch.object(webgl.subprocess, "Popen", side_effect=launch):
                 with self.assertRaisesRegex(RuntimeError, "cannot stop"):
-                    webgl.run_browser(Path("browser"), Path(self.directory.name), 5, Mock(side_effect=RuntimeError("cannot stop")))
+                    webgl.run_browser(Path("browser"), Path(self.directory.name), 5, own_process)
             self.assertEqual(servers[0].fileno(), -1)
         finally:
             for server in servers:

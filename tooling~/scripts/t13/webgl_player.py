@@ -10,7 +10,7 @@ import re
 import subprocess
 import threading
 import time
-from typing import Any, Callable, cast
+from typing import Any, Callable, ContextManager, cast
 from uuid import uuid4
 
 
@@ -73,7 +73,7 @@ def report_server(directory: Path, token: str, report: list[bytes], ready: threa
     return ReportServer(directory, token, report, ready)
 
 
-def run_browser(browser: Path, output: Path, timeout: int, stop_process: Callable[[subprocess.Popen[Any]], None]) -> dict[str, Any]:
+def run_browser(browser: Path, output: Path, timeout: int, own_process: Callable[[subprocess.Popen[Any]], ContextManager[subprocess.Popen[Any]]]) -> dict[str, Any]:
     token = uuid4().hex
     reports: list[bytes] = []
     ready = threading.Event()
@@ -84,25 +84,35 @@ def run_browser(browser: Path, output: Path, timeout: int, stop_process: Callabl
                  "--disable-background-networking", "--autoplay-policy=no-user-gesture-required",
                  "--enable-unsafe-swiftshader", "--user-data-dir=" + str(output / "browser-profile"),
                  f"http://127.0.0.1:{server.server_port}/?token={token}"]
-    process = None
+    primary: BaseException | None = None
     try:
         with (output / "browser.log").open("wb") as log:
-            process = subprocess.Popen(arguments, stdout=log, stderr=subprocess.STDOUT)
-            (output / "browser-pid.txt").write_text(str(process.pid), encoding="ascii")
-            deadline = time.monotonic() + timeout
-            while not ready.wait(min(0.2, max(0, deadline - time.monotonic()))):
-                if process.poll() is not None:
-                    raise RuntimeError(f"Browser exited before reporting: {process.returncode}")
-                if deadline <= time.monotonic():
-                    raise TimeoutError("Actual WebGL player emitted no report before deadline")
-            (output / "player-report.json").write_bytes(reports[0])
-            return {"pid": process.pid, "arguments": arguments, "reportToken": token,
-                    "rendering": "headless browser; software WebGL allowed; no visual acceptance"}
+            try:
+                with own_process(subprocess.Popen(arguments, stdout=log, stderr=subprocess.STDOUT)) as process:
+                    (output / "browser-pid.txt").write_text(str(process.pid), encoding="ascii")
+                    deadline = time.monotonic() + timeout
+                    while not ready.wait(min(0.2, max(0, deadline - time.monotonic()))):
+                        if process.poll() is not None:
+                            raise RuntimeError(f"Browser exited before reporting: {process.returncode}")
+                        if deadline <= time.monotonic():
+                            raise TimeoutError("Actual WebGL player emitted no report before deadline")
+                    (output / "player-report.json").write_bytes(reports[0])
+                    return {"pid": process.pid, "arguments": arguments, "reportToken": token,
+                            "rendering": "headless browser; software WebGL allowed; no visual acceptance"}
+            except BaseException as error:
+                primary = error
+                raise
+    except BaseException as error:
+        if primary is not None and primary is not error:
+            raise primary from error
+        primary = error
+        raise
     finally:
         try:
-            if process is not None:
-                stop_process(process)
-        finally:
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+        except BaseException as cleanup_error:
+            if primary is not None:
+                raise primary from cleanup_error
+            raise

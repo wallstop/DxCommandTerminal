@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import gzip
 import io
@@ -12,7 +13,7 @@ import re
 import shutil
 import subprocess
 import tarfile
-from typing import Any
+from typing import Any, Iterator
 
 import webgl_player
 from webgl_player import run_browser
@@ -259,6 +260,32 @@ def stop_owned_process(process: subprocess.Popen[Any]) -> None:
     process.wait(timeout=30)
 
 
+class OwnedProcessCleanupError(RuntimeError):
+    def __init__(self, process: subprocess.Popen[Any], primary: BaseException | None, cleanup: BaseException):
+        self.process = process
+        self.primary = primary
+        self.cleanup = cleanup
+        primary_text = "no primary failure" if primary is None else f"{type(primary).__name__}: {primary}"
+        super().__init__(f"Owned process {process.pid} cleanup failed; {primary_text}; {type(cleanup).__name__}: {cleanup}")
+
+
+@contextmanager
+def owned_process(process: subprocess.Popen[Any]) -> Iterator[subprocess.Popen[Any]]:
+    primary: BaseException | None = None
+    try:
+        yield process
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        try:
+            if process.poll() is None:
+                stop_owned_process(process)
+        except BaseException as cleanup_error:
+            # Abort the matrix: unresolved ownership must not start another leg.
+            raise OwnedProcessCleanupError(process, primary, cleanup_error) from primary
+
+
 def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, previous: dict[str, Any] | None = None, backend: str = "Mono", stripping: str = "Low", target: str = "StandaloneWindows64", browser: Path | None = None) -> dict[str, Any]:
     profile = leg["inputProfile"]
     project = Path(leg["project"])
@@ -286,13 +313,12 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
         evidence["fixtureHashes"] = install_fixtures(project, previous, profile, target)
         env = dict(os.environ, DX_T13_PLAYER_OUT=str(output), DX_T13_INPUT_PROFILE=profile, DX_T13_BACKEND=backend, DX_T13_STRIPPING=stripping, DX_T13_TARGET=target)
         command = [str(unity), "-batchmode", "-projectPath", str(project), "-buildTarget", "WebGL" if target == "WebGL" else "Win64", "-executeMethod", "DxCommandTerminal.T13.PlayerSmoke.Editor.BuildProbe.Run", "-logFile", str(output / "build.log")]
-        process = subprocess.Popen(command, env=env)
-        evidence["buildPid"] = process.pid
-        try:
-            evidence["buildExit"] = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            stop_owned_process(process)
-            raise TimeoutError("Owned player drill exceeded deadline")
+        with owned_process(subprocess.Popen(command, env=env)) as process:
+            evidence["buildPid"] = process.pid
+            try:
+                evidence["buildExit"] = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                raise TimeoutError("Owned player drill exceeded deadline")
         if evidence["buildExit"] != 0:
             raise ValueError(f"Build/run process exited {evidence['buildExit']}")
         evidence["buildSettings"] = checked_build_settings(output, backend, stripping)
@@ -303,7 +329,7 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
             if browser is None or not browser.is_file():
                 raise ValueError("WebGL requires an existing browser executable")
             evidence["browserSha256"] = sha256(browser)
-            evidence["browserRun"] = run_browser(browser, output, min(timeout, 180), stop_owned_process)
+            evidence["browserRun"] = run_browser(browser, output, min(timeout, 180), owned_process)
             binaries = [str(file.relative_to(output)).replace("\\", "/") for file in (output / "Player").rglob("*") if file.is_file()]
             if not any(name.endswith(".wasm") for name in binaries):
                 raise ValueError("WebGL build has no WebAssembly payload")
@@ -322,6 +348,8 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
         evidence["playerReport"] = checked_player_report(output / "player-report.json", profile, version, backend, target)
         validate_profile(project, profile)
         evidence["passed"] = True
+    except OwnedProcessCleanupError:
+        raise
     except Exception as exception:
         evidence["failure"] = str(exception)
     (output / "manifest.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")

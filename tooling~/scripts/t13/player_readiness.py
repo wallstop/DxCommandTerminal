@@ -113,13 +113,12 @@ def run_leg(leg: dict[str, Any], output: Path, previous: dict[str, Any] | None, 
         environment = dict(os.environ, DX_T13_PLAYER_OUT=str(output), DX_T13_INPUT_PROFILE=profile, DX_T13_BACKEND="Mono", DX_T13_STRIPPING="Low", DX_T13_TARGET="StandaloneWindows64", DX_T13_BUILD_ONLY="1")
         command = [str(unity), "-batchmode", "-projectPath", str(project), "-buildTarget", "Win64", "-executeMethod", "DxCommandTerminal.T13.PlayerSmoke.Editor.BuildProbe.Run", "-logFile", str(output / "build.log")]
         record["buildArguments"] = command
-        build = subprocess.Popen(command, env=environment)
-        record["buildPid"] = build.pid
-        try:
-            record["buildExit"] = build.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            smoke.stop_owned_process(build)
-            raise TimeoutError("Owned readiness build exceeded deadline")
+        with smoke.owned_process(subprocess.Popen(command, env=environment)) as build:
+            record["buildPid"] = build.pid
+            try:
+                record["buildExit"] = build.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                raise TimeoutError("Owned readiness build exceeded deadline")
         if record["buildExit"] != 0:
             raise ValueError("Readiness build failed")
         smoke.checked_build_settings(output, "Mono", "Low")
@@ -136,14 +135,13 @@ def run_leg(leg: dict[str, Any], output: Path, previous: dict[str, Any] | None, 
             warm = WARM_SAMPLES if index == 0 else 0
             env = dict(os.environ, DX_T13_PLAYER_REPORT=str(folder / "report.json"), DX_T13_INPUT_PROFILE=profile, DX_T13_RUN_TOKEN=token, DX_T13_WARM_SAMPLES=str(warm))
             arguments = [str(output / "Player/Smoke.exe"), "-screen-fullscreen", "0", "-screen-width", "96", "-screen-height", "96", "-logFile", str(folder / "player.log")]
-            player = subprocess.Popen(arguments, env=env)
-            owner = {"pid": player.pid, "token": token, "arguments": arguments, "warmSamples": warm}
-            (folder / "owner.json").write_text(json.dumps(owner, indent=2))
-            try:
-                owner["exit"] = player.wait(timeout=120)
-            except subprocess.TimeoutExpired:
-                smoke.stop_owned_process(player)
-                raise TimeoutError("Owned readiness player exceeded deadline")
+            with smoke.owned_process(subprocess.Popen(arguments, env=env)) as player:
+                owner = {"pid": player.pid, "token": token, "arguments": arguments, "warmSamples": warm}
+                (folder / "owner.json").write_text(json.dumps(owner, indent=2))
+                try:
+                    owner["exit"] = player.wait(timeout=120)
+                except subprocess.TimeoutExpired:
+                    raise TimeoutError("Owned readiness player exceeded deadline")
             (folder / "owner.json").write_text(json.dumps(owner, indent=2))
             if owner["exit"] != 0:
                 raise ValueError(f"Readiness player {index} exited {owner['exit']}")
@@ -159,6 +157,8 @@ def run_leg(leg: dict[str, Any], output: Path, previous: dict[str, Any] | None, 
         record["measurements"] = summarize(record["reports"], command_count)
         record["executionPassed"] = True
         record["passed"] = record["measurements"]["passed"]
+    except smoke.OwnedProcessCleanupError:
+        raise
     except Exception as error:
         record["failure"] = str(error)
     (output / "manifest.json").write_text(json.dumps(record, indent=2))
