@@ -1,6 +1,7 @@
 """Exercise payload verification with real Git repositories and .NET builds."""
 from __future__ import annotations
 
+from collections.abc import Iterator
 import io
 import os
 from pathlib import Path
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from typing import ClassVar
 import unittest
 from unittest.mock import patch
 
@@ -25,6 +27,15 @@ def git(root: Path, *arguments: str) -> None:
 def commit(root: Path) -> None:
     git(root, "add", ".")
     git(root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "Fixture")
+
+
+def build_shipped(repo: Path) -> Iterator[subprocess.CompletedProcess[str]]:
+    shipped = repo / "Runtime/Analyzers"
+    for payload in verifier.PAYLOADS:
+        yield subprocess.run(
+            ["dotnet", "build", str(repo / payload.project), "-c", "Release", "--nologo", f"/p:AnalyzerPayloadOutputDir={shipped}"],
+            cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120,
+        )
 
 
 class ArchiveTests(unittest.TestCase):
@@ -75,6 +86,38 @@ class ArchiveTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("dotnet"), ".NET SDK required for real compiler controls")
 class CompilerTests(unittest.TestCase):
+    _tracked_fixture: ClassVar[tuple[tuple[Path, bytes], ...]]
+    _shipped_fixture: ClassVar[tuple[tuple[str, bytes], ...]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        with tempfile.TemporaryDirectory(prefix="payload compiler template ") as temporary:
+            repo = Path(temporary) / "selected repository"
+            repo.mkdir()
+            git(repo, "init", "-q")
+            sdk = subprocess.check_output(["dotnet", "--version"], text=True).strip().split(".")[0]
+            target = f"net{sdk}.0"
+            files: list[Path] = []
+            for payload in verifier.PAYLOADS:
+                project = repo / payload.project
+                project.parent.mkdir(parents=True)
+                project.write_text(f'''<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><TargetFramework>{target}</TargetFramework><DebugType>none</DebugType>
+<Deterministic>true</Deterministic><IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion></PropertyGroup>
+<Target Name="Payload" AfterTargets="Build"><MakeDir Directories="$(AnalyzerPayloadOutputDir)" />
+<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AnalyzerPayloadOutputDir)" /></Target>
+</Project>''')
+                source = project.parent / "Fixture.cs"
+                source.write_text('public static class Fixture { public static string Value => "baseline"; }')
+                files.extend((project, source))
+            commit(repo)
+            for result in build_shipped(repo):
+                if result.returncode != 0:
+                    raise AssertionError(result.stdout)
+            cls._tracked_fixture = tuple((file.relative_to(repo), file.read_bytes()) for file in files)
+            cls._shipped_fixture = tuple((payload.dll, (repo / "Runtime/Analyzers" / payload.dll).read_bytes()) for payload in verifier.PAYLOADS)
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="payload compiler ")
         self.addCleanup(self.temporary.cleanup)
@@ -89,28 +132,18 @@ class CompilerTests(unittest.TestCase):
         self.scratch = self.base / "scratch"
         self.scratch.mkdir()
         git(self.repo, "init", "-q")
-        sdk = subprocess.check_output(["dotnet", "--version"], text=True).strip().split(".")[0]
-        self.target = f"net{sdk}.0"
-        for payload in verifier.PAYLOADS:
-            project = self.repo / payload.project
-            project.parent.mkdir(parents=True)
-            project.write_text(f'''<Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup><TargetFramework>{self.target}</TargetFramework><DebugType>none</DebugType>
-<Deterministic>true</Deterministic><IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion></PropertyGroup>
-<Target Name="Payload" AfterTargets="Build"><MakeDir Directories="$(AnalyzerPayloadOutputDir)" />
-<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AnalyzerPayloadOutputDir)" /></Target>
-</Project>''')
-            (project.parent / "Fixture.cs").write_text('public static class Fixture { public static string Value => "baseline"; }')
+        for relative, contents in self._tracked_fixture:
+            destination = self.repo / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(contents)
         commit(self.repo)
-        self.rebuild_shipped()
+        shipped = self.repo / "Runtime/Analyzers"
+        shipped.mkdir(parents=True)
+        for name, contents in self._shipped_fixture:
+            (shipped / name).write_bytes(contents)
 
     def rebuild_shipped(self) -> None:
-        shipped = self.repo / "Runtime/Analyzers"
-        for payload in verifier.PAYLOADS:
-            result = subprocess.run(
-                ["dotnet", "build", str(self.repo / payload.project), "-c", "Release", "--nologo", f"/p:AnalyzerPayloadOutputDir={shipped}"],
-                cwd=self.repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120,
-            )
+        for result in build_shipped(self.repo):
             self.assertEqual(result.returncode, 0, result.stdout)
 
     def run_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
