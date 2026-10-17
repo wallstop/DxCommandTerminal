@@ -7,8 +7,10 @@
     analyzer payload, and Samples~ content ships no metas - the shape the
     exporter excludes by design. Fixtures build in milliseconds on ext4, so
     no test here pays the real tree's whole-package export or its 9p walk.
-*/
+ */
+import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const FIXTURE_GUIDS = {
@@ -35,17 +37,57 @@ const FIXTURE_ASMDEF = {
   noEngineReferences: false
 };
 
-function writeMeta(root, assetPath, guid, isFolder) {
-  const metaPath = `${assetPath}.meta`;
-  fs.mkdirSync(path.dirname(path.join(root, metaPath)), { recursive: true });
-  const lines = ["fileFormatVersion: 2", `guid: ${guid}`];
-  if (isFolder) {
-    lines.push("folderAsset: yes", "DefaultImporter:");
+export function makeFixturePackage(root, { name = "test.pkg", version = "0.1.0" } = {}) {
+  fs.mkdirSync(root, { recursive: true });
+  for (const [relative, content] of fixtureFileBodies({ name, version })) {
+    const target = path.join(root, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
   }
-  fs.writeFileSync(path.join(root, metaPath), `${lines.join("\n")}\n`);
+  return root;
 }
 
-export function makeFixturePackage(root, { name = "test.pkg", version = "0.1.0" } = {}) {
+/*
+    A stable home for one fixture shape, for the tests that export with
+    `cache: true`: the exporter's pack query (`npm pack --dry-run`, a few
+    hundred milliseconds of npm startup) and archive build are keyed on the
+    packaged inputs under the fixture's own `.artifacts/export-cache/`, so a
+    root that survives between runs turns every warm export into two cache
+    reads. The directory name hashes the exact bytes the builder writes
+    (name, version, and every file body), so a fixture change addresses a
+    fresh root by construction and a stale one is unreachable, and files are
+    rewritten only when their bytes changed so the input signature - size,
+    mtime, inode - stays stable across runs. Tests that mutate a fixture
+    pass a distinct `variant` and never share a root with canonical readers;
+    the tree lives under the OS temp directory, so it costs nothing in the
+    repository and resets with the machine.
+ */
+export function persistentFixturePackage({ name = "test.pkg", version = "0.1.0", variant = "" } = {}) {
+  const files = fixtureFileBodies({ name, version });
+  const identity = crypto.createHash("sha256");
+  identity.update(`${variant}\0`);
+  for (const [relative, content] of files) {
+    identity.update(relative);
+    identity.update("\0");
+    identity.update(content);
+    identity.update("\0");
+  }
+  const root = path.join(os.tmpdir(), "dxct-fixture-packages", identity.digest("hex").slice(0, 16));
+  fs.mkdirSync(root, { recursive: true });
+  for (const [relative, content] of files) {
+    const target = path.join(root, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    try {
+      if (fs.readFileSync(target, "utf8") === content) continue;
+    } catch {
+      /* Absent: write it. */
+    }
+    fs.writeFileSync(target, content);
+  }
+  return root;
+}
+
+function fixtureFileBodies({ name, version }) {
   const manifest = {
     name,
     version,
@@ -69,24 +111,29 @@ export function makeFixturePackage(root, { name = "test.pkg", version = "0.1.0" 
       "Samples~"
     ]
   };
-  fs.mkdirSync(root, { recursive: true });
-  fs.writeFileSync(path.join(root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  writeMeta(root, "package.json", FIXTURE_GUIDS.manifest, false);
-  fs.writeFileSync(path.join(root, "README.md"), "# test pkg\n");
-  writeMeta(root, "README.md", FIXTURE_GUIDS.readme, false);
-  fs.mkdirSync(path.join(root, "Runtime"), { recursive: true });
-  writeMeta(root, "Runtime", FIXTURE_GUIDS.runtimeFolder, true);
-  fs.writeFileSync(path.join(root, "Runtime", "Foo.cs"), "// foo\n");
-  writeMeta(root, "Runtime/Foo.cs", FIXTURE_GUIDS.runtimeSource, false);
-  fs.writeFileSync(path.join(root, "Runtime", "Fixture.asmdef"), `${JSON.stringify(FIXTURE_ASMDEF, null, 2)}\n`);
-  writeMeta(root, "Runtime/Fixture.asmdef", FIXTURE_GUIDS.runtimeAsmdef, false);
-  fs.mkdirSync(path.join(root, "Runtime", "Analyzers"), { recursive: true });
-  writeMeta(root, "Runtime/Analyzers", FIXTURE_GUIDS.analyzersFolder, true);
-  fs.writeFileSync(path.join(root, "Runtime", "Analyzers", "Payload.cs"), "// analyzer payload stand-in\n");
-  writeMeta(root, "Runtime/Analyzers/Payload.cs", FIXTURE_GUIDS.analyzerPayload, false);
-  fs.writeFileSync(path.join(root, "Runtime", "Analyzers", "Payload.dll"), "binary payload\n");
-  fs.writeFileSync(path.join(root, "Runtime", "Analyzers", "Payload.dll.meta"), "fileFormatVersion: 2\n");
-  fs.mkdirSync(path.join(root, "Samples~"), { recursive: true });
-  fs.writeFileSync(path.join(root, "Samples~", "Widget.cs"), "// sample\n");
-  return root;
+  const lines = [];
+  const file = (relative, content) => lines.push([relative, content]);
+  const meta = (assetPath, guid, isFolder) => {
+    const entries = ["fileFormatVersion: 2", `guid: ${guid}`];
+    if (isFolder) {
+      entries.push("folderAsset: yes", "DefaultImporter:");
+    }
+    file(`${assetPath}.meta`, `${entries.join("\n")}\n`);
+  };
+  file("package.json", `${JSON.stringify(manifest, null, 2)}\n`);
+  meta("package.json", FIXTURE_GUIDS.manifest, false);
+  file("README.md", "# test pkg\n");
+  meta("README.md", FIXTURE_GUIDS.readme, false);
+  meta("Runtime", FIXTURE_GUIDS.runtimeFolder, true);
+  file("Runtime/Foo.cs", "// foo\n");
+  meta("Runtime/Foo.cs", FIXTURE_GUIDS.runtimeSource, false);
+  file("Runtime/Fixture.asmdef", `${JSON.stringify(FIXTURE_ASMDEF, null, 2)}\n`);
+  meta("Runtime/Fixture.asmdef", FIXTURE_GUIDS.runtimeAsmdef, false);
+  meta("Runtime/Analyzers", FIXTURE_GUIDS.analyzersFolder, true);
+  file("Runtime/Analyzers/Payload.cs", "// analyzer payload stand-in\n");
+  meta("Runtime/Analyzers/Payload.cs", FIXTURE_GUIDS.analyzerPayload, false);
+  file("Runtime/Analyzers/Payload.dll", "binary payload\n");
+  file("Runtime/Analyzers/Payload.dll.meta", "fileFormatVersion: 2\n");
+  file("Samples~/Widget.cs", "// sample\n");
+  return lines;
 }

@@ -1230,7 +1230,7 @@ test("a pathspec-scoped listing keys only the files under the pathspec", async (
   }
 });
 
-test("the markdown gate keys its own files, not the whole snapshot", () => {
+test("the markdown gate keys its own files, not the whole snapshot", async () => {
   const mdCheck = buildChecks().find((check) => check.name === "lint-md-format");
   assert.deepEqual(
     mdCheck.cacheTrackedPaths,
@@ -1244,14 +1244,41 @@ test("the markdown gate keys its own files, not the whole snapshot", () => {
   );
   assert.equal(mdCheck.cacheTrackedFiles, undefined, "the whole-snapshot key would re-run the gate on any edit");
   assert.equal(mdCheck.cacheDependencies, true, "prettier runs from node_modules; its tree must key the gate");
-  const context = {
-    node: "node", platform: process.platform, arch: process.arch, files: [],
-    dependencies: "dependencies", git: "git-version", gitExecutable: "git-bytes", gitConfig: "git-config"
-  };
-  const original = cacheKeyForCheck(mdCheck, context);
-  for (const input of ["git", "gitExecutable", "gitConfig"]) {
-    assert.notEqual(original, cacheKeyForCheck(mdCheck, { ...context, [input]: "changed" }), `markdown must key ${input}`);
-  }
+  /*
+      The key-identity probes run in a scratch repository carrying the real
+      gate's spec arrays (shape-asserted above): the identity under test is
+      the fold, and on the live checkout each `cacheKeyForCheck` call would
+      re-list every tracked markdown file over the 9p mount - four spawns of
+      seconds each - while the scratch tree answers the same fold in
+      milliseconds. The live gate's real-repo behavior is what running
+      preflight itself exercises; this test owns the keying shape.
+   */
+  const repo = scratchRepo();
+  const observe = async () =>
+    (await repo.run(`
+        const check = {
+          name: "lint-md-format",
+          command: "node tooling~/scripts/lint-md-format.mjs",
+          cacheTrackedPaths: ${JSON.stringify(mdCheck.cacheTrackedPaths)},
+          cachePaths: ${JSON.stringify(mdCheck.cachePaths)},
+          cacheDependencies: true,
+          cacheRuntimeEnvironment: true,
+          cacheGit: true,
+          cacheGitConfig: true
+        };
+        const context = {
+          node: "node", platform: "linux", arch: "x64", files: [],
+          dependencies: "dependencies", git: "git-version", gitExecutable: "git-bytes", gitConfig: "git-config"
+        };
+        console.log(module.cacheKeyForCheck(check, context));
+        for (const input of ["git", "gitExecutable", "gitConfig"]) {
+          console.log(module.cacheKeyForCheck(check, { ...context, [input]: "changed" }));
+        }
+      `)).split("\n");
+  const [original, gitKey, gitExecutableKey, gitConfigKey] = await observe();
+  assert.notEqual(gitKey, original, "markdown must key git");
+  assert.notEqual(gitExecutableKey, original, "markdown must key gitExecutable");
+  assert.notEqual(gitConfigKey, original, "markdown must key gitConfig");
 });
 
 test("the run's key computer answers the live key and moves with its inputs", () => {

@@ -153,9 +153,25 @@ function installEditorDevTools(project) {
     const source = path.join(TOOLING_ROOT, "scripts", "mcp", `${name}.cs.txt`);
     const target = `Assets/Editor/${name}.cs`;
     fs.copyFileSync(source, path.join(project, target));
-    hashes[target] = sha256File(source);
+    hashes[target] = editorDevToolHash(source);
   }
   return hashes;
+}
+
+/*
+    Per-process constants: the dev tools' bytes are fixed inputs of every
+    leg, and the matrix runner pays this walk once per manifest - the same
+    reuse posture as the git sample and the exported-artifact digest.
+ */
+const EDITOR_DEV_TOOL_HASHES = new Map();
+
+function editorDevToolHash(sourcePath) {
+  let hash = EDITOR_DEV_TOOL_HASHES.get(sourcePath);
+  if (hash === undefined) {
+    hash = sha256File(sourcePath);
+    EDITOR_DEV_TOOL_HASHES.set(sourcePath, hash);
+  }
+  return hash;
 }
 function canonicalField(text, field, allowedValues) {
   const pattern = new RegExp(`^([ \t]*${field}:[ \t]*)(.*?)([ \t]*\r?)$`, "gmu");
@@ -342,7 +358,27 @@ function phaseRecord(run, logPath) {
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
+
+/*
+    The fixture manifest hashes are per-process constants per fixture root:
+    the runner records what was installed, the root's bytes do not change
+    between legs in one run, and the 9p walk otherwise costs every manifest
+    its full read of the tree (the same reuse posture as the git sample).
+    A caller that mutates a root mid-run hands the runner a fresh root - the
+    fixture-drill failure mode copies the tree before mutating it.
+ */
+const FIXTURE_HASH_CACHE = new Map();
+
 function fixtureHashes(fixtureRoot) {
+  let result = FIXTURE_HASH_CACHE.get(fixtureRoot);
+  if (result === undefined) {
+    result = Object.freeze(readFixtureHashes(fixtureRoot));
+    FIXTURE_HASH_CACHE.set(fixtureRoot, result);
+  }
+  return result;
+}
+
+function readFixtureHashes(fixtureRoot) {
   const root = path.join(fixtureRoot, "Assets");
   const result = {};
   const visit = (directory) => {
@@ -440,8 +476,12 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
   if (unity === "") {
     throw new Error(`missing Unity editor path for ${leg.id}`);
   }
-  const artifactBuffer = fs.readFileSync(options.artifact);
-  const artifact = listArtifact(artifactBuffer);
+  /*
+      runMatrix parses the artifact once for the whole matrix and hands the
+      buffer and listing down; a direct runLeg caller reads it here instead.
+   */
+  const artifactBuffer = options.artifactBuffer ?? fs.readFileSync(options.artifact);
+  const artifact = options.artifactEntries ?? listArtifact(artifactBuffer);
   const artifactSha256 = sha256Buffer(artifactBuffer);
   const expectedArtifactSha256 = options.expectedArtifactSha256 ?? currentArtifactSha256();
   const probeVersion = runtime.probeEditorVersion ?? probeEditorVersion;
@@ -605,9 +645,9 @@ export async function runMatrix(options, matrix = loadMatrix(options.matrix), ru
   const requestedLegs = options.only === "" ? matrix.editors.map((leg) => leg.id) : [options.only];
   const selectedLegs = resolveLegs(options, matrix).map((leg) => leg.id);
   const expectedArtifactSha256 = options.expectedArtifactSha256 ?? currentArtifactSha256();
-  const resolved = { ...options, out: output, requestedLegs, selectedLegs, expectedArtifactSha256 };
   const artifactBuffer = fs.readFileSync(options.artifact);
   const artifact = listArtifact(artifactBuffer);
+  const resolved = { ...options, out: output, requestedLegs, selectedLegs, expectedArtifactSha256, artifactBuffer, artifactEntries: artifact };
   const manifests = [];
   for (const legId of selectedLegs) {
     manifests.push(

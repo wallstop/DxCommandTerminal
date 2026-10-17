@@ -13,32 +13,28 @@ import test from "node:test";
 import assert from "node:assert";
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { artifactCacheKey, exportUnityPackage, readCachedArtifact } from "../release/export-unitypackage.mjs";
-import { makeFixturePackage } from "./support/fixture-package.mjs";
+import { persistentFixturePackage } from "./support/fixture-package.mjs";
 import { readArtifact } from "./support/unitypackage-artifact.mjs";
 
 const exporterHref = pathToFileURL(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "release", "export-unitypackage.mjs")
 ).href;
 
-const tempDirs = [];
-test.after(() => {
-  for (const dir of tempDirs) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-function fixturePackage(label) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), `dxt-export-cache-${label}-`));
-  tempDirs.push(root);
-  return makeFixturePackage(root, { name: "cache.pkg", version: "0.2.0" });
-}
+/*
+    Roots persist under the OS temp directory (see persistentFixturePackage)
+    so warm runs answer from the exporter's disk caches instead of spawning
+    `npm pack` and rebuilding the archive. The read-only tests share one
+    canonical root; the edit test mutates a variant root so the canonical
+    bytes and their cache entries stay untouched.
+ */
+const canonicalPackage = () => persistentFixturePackage({ name: "cache.pkg", version: "0.2.0" });
+const mutablePackage = () => persistentFixturePackage({ name: "cache.pkg", version: "0.2.0", variant: "edits" });
 
 test("the cached export carries the packaged tree", () => {
-  const packageRoot = fixturePackage("artifact");
+  const packageRoot = canonicalPackage();
   const cached = exportUnityPackage({ packageRoot, out: "", cache: true });
   assert.strictEqual(cached.name, "cache.pkg");
   const names = readArtifact(cached.buffer).map((entry) => entry.name);
@@ -47,7 +43,7 @@ test("the cached export carries the packaged tree", () => {
 });
 
 test("the entry sits under the recomputable key and answers byte-identically", () => {
-  const packageRoot = fixturePackage("key");
+  const packageRoot = canonicalPackage();
   const key = artifactCacheKey(packageRoot);
   const entry = path.join(packageRoot, ".artifacts", "export-cache", `${key}.unitypackage`);
   const guarded = exportUnityPackage({ packageRoot, out: "", cache: true });
@@ -66,7 +62,7 @@ test("a packaged edit re-exports; an excluded edit does not", async () => {
       identity the second assert fails loudly instead of passing vacuously.
    */
   const first = await import(exporterHref);
-  const packageRoot = fixturePackage("inputs");
+  const packageRoot = mutablePackage();
   const beforeKey = first.artifactCacheKey(packageRoot);
   const before = first.exportUnityPackage({ packageRoot, out: "", cache: true });
 
@@ -89,10 +85,18 @@ test("a packaged edit re-exports; an excluded edit does not", async () => {
   assert.strictEqual(third.artifactCacheKey(packageRoot), stableKey, "an excluded edit must not move the key");
   const stable = third.exportUnityPackage({ packageRoot, out: "", cache: true });
   assert.strictEqual(stable.buffer.equals(afterEdit.buffer), true, "the answer is unchanged");
+
+  /*
+      Leave the variant root's packaged bytes canonical: the next run's
+      first export then answers from the canonical cache entry instead of
+      paying the npm query again.
+   */
+  fs.writeFileSync(path.join(packageRoot, "Runtime", "Foo.cs"), "// foo\n");
+  fs.writeFileSync(path.join(packageRoot, "Runtime", "Analyzers", "Payload.dll"), "binary payload\n");
 });
 
 test("an entry whose bytes betray their digest is a miss, never an answer", () => {
-  const packageRoot = fixturePackage("digest");
+  const packageRoot = canonicalPackage();
   /*
       A private probe key under the fixture's own cache directory: no
       parallel process ever reads it, so the entry the previous tests
