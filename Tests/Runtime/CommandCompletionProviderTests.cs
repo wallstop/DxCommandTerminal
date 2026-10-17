@@ -231,10 +231,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             List<CommandCompletion> results = new();
-            LogAssert.Expect(
-                LogType.Error,
-                new Regex(@"\[DxCommandTerminal\] Completion provider for 'ctx-throwing' failed: " + @"System\.InvalidOperationException: provider exploded")
-            );
+            LogAssert.Expect(LogType.Error, new Regex(@"\[DxTerminal\] Completion provider for 'ctx-throwing' failed: " + @"System\.InvalidOperationException: provider exploded"));
             Assert.IsTrue(
                 Terminal.Shell.TryComplete(CommandExecutionContext.Current, "ctx-throwing ", 13, results, out _),
                 "A throwing provider still counts as provider-answered"

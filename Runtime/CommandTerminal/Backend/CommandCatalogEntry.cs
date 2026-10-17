@@ -4,7 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Reflection;
 
     /// <summary>
-    ///     A single source-generated command registration. The DxCommandTerminal
+    ///     A single source-generated command registration. The DxTerminal
     ///     source generator emits one <c>CommandCatalog</c> per assembly that declares
     ///     <see cref="Attributes.RegisterCommandAttribute"/> methods; each catalog
     ///     produces instances of this type so the shell can register commands without

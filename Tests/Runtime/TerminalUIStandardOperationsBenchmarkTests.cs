@@ -24,7 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         first-open tree build. Windows cover the sync package-owned work
         only: UITK raises its ChangeEvent and lands layout outside or astride
         these windows, and each row names what it includes. The Measures...
-        methods log evidence under [DxCommandTerminal][Scale] and pin no
+        methods log evidence under [DxTerminal][Scale] and pin no
         budgets. The ...StaysUnderTripwire methods are generous regression
         tripwires sized from this suite's own recorded evidence on the pinned
         local editor (Unity 6000.4.6f1); they are environment-specific and
@@ -137,7 +137,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static void LogScale(string operation, string detail, OperationReport report)
         {
             Debug.Log(
-                $"[DxCommandTerminal][Scale] op={operation} {detail} "
+                $"[DxTerminal][Scale] op={operation} {detail} "
                     + $"samples={report.SampleCount} "
                     + $"median={report.MedianMilliseconds:F3}ms "
                     + $"p95={report.Percentile95Milliseconds:F3}ms "

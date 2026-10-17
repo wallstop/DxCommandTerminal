@@ -16,7 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         (window geometry, animation curves, ids, persisted theme/font
         preferences) stay on the components.
      */
-    [CreateAssetMenu(menuName = "Wallstop Studios/DxCommandTerminal/Terminal Settings", fileName = nameof(TerminalSettings), order = 1_111_125)]
+    [CreateAssetMenu(menuName = "Wallstop Studios/DxTerminal/Terminal Settings", fileName = nameof(TerminalSettings), order = 1_111_125)]
     public sealed class TerminalSettings : ScriptableObject
     {
         [Header("Buffers")]

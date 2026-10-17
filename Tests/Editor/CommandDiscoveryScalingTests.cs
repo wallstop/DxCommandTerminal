@@ -17,7 +17,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         readiness over ~500 filler assemblies plus the live editor domain,
         and over 0/10/100/1,000/10,000-command tiers through the reflected
         and provider pipelines. Numbers land in the log
-        ([DxCommandTerminal][Scale]) as session evidence; asserted budgets
+        ([DxTerminal][Scale]) as session evidence; asserted budgets
         are generous tripwires that catch a return to broad-domain scans
         (issue #36's multi-second stalls), not the plan's 5 ms readiness
         gate, which stays a pinned-environment measurement. Each warm
@@ -354,7 +354,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             float tailBudgetMilliseconds = warmBudgetMilliseconds * TailTripwireMultiplier;
             string coldConfirmations = readiness.ColdConfirmationMilliseconds.Length == 0 ? "none" : string.Join(", ", readiness.ColdConfirmationMilliseconds);
             Debug.Log(
-                $"[DxCommandTerminal][Scale] {detail} "
+                $"[DxTerminal][Scale] {detail} "
                     + $"assemblies={AppDomain.CurrentDomain.GetAssemblies().Length} "
                     + $"cold={readiness.ColdMilliseconds:F3}ms "
                     + $"coldBudget={coldBudgetMilliseconds:F3}ms "

@@ -1,6 +1,6 @@
 # Install
 
-DxCommandTerminal is a Unity package. It supports Unity 2021.3 and newer.
+DxTerminal is a Unity package. It supports Unity 2021.3 and newer.
 
 ## Install the package
 

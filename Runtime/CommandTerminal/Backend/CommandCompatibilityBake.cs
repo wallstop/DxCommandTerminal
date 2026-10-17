@@ -51,7 +51,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         internal const string PartialCompanionTypeName = "DxCommandTerminalBinder";
 
-        internal const string OwnershipMarker = "DxCommandTerminal player compatibility bake";
+        internal const string OwnershipMarker = "DxTerminal player compatibility bake";
 
         private const string ManifestFileName = "DxCommandTerminalCompatibilityBake.link.xml";
 
@@ -272,7 +272,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             catch (Exception e)
             {
-                Debug.LogWarning(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Player compatibility bake manifest write failed: " + $"{e}"));
+                Debug.LogWarning(LogTextSanitizer.Sanitize($"[DxTerminal] Player compatibility bake manifest write failed: " + $"{e}"));
                 path = null;
                 return false;
             }
@@ -486,21 +486,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             List<PreservationEntry> entries = CollectPreservations(CollectAttributedCommands());
             if (!TryBuildManifest(entries, out string manifest))
             {
-                Debug.Log("[DxCommandTerminal] Player compatibility bake: every discovered " + "command handler is rooted by generated code; nothing to preserve");
+                Debug.Log("[DxTerminal] Player compatibility bake: every discovered " + "command handler is rooted by generated code; nothing to preserve");
                 return null;
             }
 
             if (!TryWriteManifestFile(manifest, out string path))
             {
                 Debug.LogWarning(
-                    "[DxCommandTerminal] Player compatibility bake could not write its "
+                    "[DxTerminal] Player compatibility bake could not write its "
                         + "preservation manifest; managed stripping may remove "
                         + "reflection-bound command handlers from this build"
                 );
                 return null;
             }
 
-            Debug.Log(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Player compatibility bake preserved {entries.Count} " + $"reflection-bound command handler(s) -> {path}"));
+            Debug.Log(LogTextSanitizer.Sanitize($"[DxTerminal] Player compatibility bake preserved {entries.Count} " + $"reflection-bound command handler(s) -> {path}"));
             return path;
         }
 

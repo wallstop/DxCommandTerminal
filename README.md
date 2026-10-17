@@ -1,9 +1,9 @@
-DX Command Terminal
+DxTerminal
 ======================
 
 # Disclosure
 
-> DxCommandTerminal builds on the original Command Terminal project. The initial development of this fork was entirely human-authored, involving months of code study, refactoring,
+> DxTerminal builds on the original Command Terminal project. The initial development of this fork was entirely human-authored, involving months of code study, refactoring,
 > testing, and refinement. Recent development is LLM-assisted, including generated code. I, wallstop, heavily review user-facing code changes and will continue to do so, but those
 > changes should no longer be understood as entirely human-authored. This approach makes continued development practical within the time I can commit and allows faster iteration.
 >
@@ -160,17 +160,17 @@ require the package's `BaseStyles.uss` on the panel settings; without it the bar
 
 ## Themes and Settings Assets
 
-Create a theme without hand-writing USS: `Assets > Create > Wallstop Studios > DxCommandTerminal > Theme Asset` makes a `TerminalThemeAsset` with color pickers for the 19 custom
+Create a theme without hand-writing USS: `Assets > Create > Wallstop Studios > DxTerminal > Theme Asset` makes a `TerminalThemeAsset` with color pickers for the 19 custom
 properties a terminal theme sheet needs. The Editor automatically writes a sibling `.uss` named after the asset and keeps it in sync when you recolor or rename it (a rename
 generates a fresh sheet file — Unity references assets by path-derived identity, so like renaming any stylesheet, packs using the old file need the new sheet re-assigned); drag
 that sheet into a `TerminalThemePack`'s Themes list and it behaves exactly like the shipped sheets — `set-theme <name>` (or the palette) picks it up. Hand-written `.uss` themes
 remain fully supported. Prefer asset names without "theme" in the middle (`DarkTheme`, `Neon Nights`); names like `Cool Theme 2` still work but their `set-theme` shorthand becomes
 ambiguous — the full class name always resolves.
 
-To share one configuration across terminals, `Assets > Create > Wallstop Studios > DxCommandTerminal > Terminal Settings` makes a `TerminalSettings` asset. Assign it to a
-`TerminalUI` or `CommandPaletteUI` and its values (buffer sizes, input caret, caret blink rate, button text, hint mode, history dedup, ignored log types, disabled commands, Unity
-log forwarding, stack-trace capture mode, and the palette hotkey) win over the component's serialized values — applied when the component wakes and re-applied whenever the terminal
-rebuilds its UI. Leave the slot empty and behavior is unchanged. Window geometry, animation curves, terminal ids, and the player's persisted theme/font choices stay per-component.
+To share one configuration across terminals, `Assets > Create > Wallstop Studios > DxTerminal > Terminal Settings` makes a `TerminalSettings` asset. Assign it to a `TerminalUI` or
+`CommandPaletteUI` and its values (buffer sizes, input caret, caret blink rate, button text, hint mode, history dedup, ignored log types, disabled commands, Unity log forwarding,
+stack-trace capture mode, and the palette hotkey) win over the component's serialized values — applied when the component wakes and re-applied whenever the terminal rebuilds its
+UI. Leave the slot empty and behavior is unchanged. Window geometry, animation curves, terminal ids, and the player's persisted theme/font choices stay per-component.
 
 Stack-trace capture (`stackTraceMode`): `All` (default) records a caller stack trace for every log entry, exactly as before. `ErrorsAndWarnings` records traces only for error,
 assert, exception, and warning entries. `Disabled` records none. Trace extraction is the most expensive part of a logged line, so games that log frequently during gameplay
@@ -317,9 +317,9 @@ One change from the original Command Parser is the usage / functionality exposed
 for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it
 very difficult to programmatically react to bad input.
 
-To remedy this, DxCommandTerminal exposes a single method, `TryGet`, and a readonly string field `contents`. `contents` returns the original input parameters as-is. `TryGet`
-attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the
-built-in ones, making use of whatever custom logic you want (JSON, for example).
+To remedy this, DxTerminal exposes a single method, `TryGet`, and a readonly string field `contents`. `contents` returns the original input parameters as-is. `TryGet` attempts to
+parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the built-in
+ones, making use of whatever custom logic you want (JSON, for example).
 
 ```csharp
 public bool TryGet<T>(out T parsed);
@@ -509,9 +509,9 @@ sets and what they control.
 get split into the array `["1", "2", "3"]` for parsing
 
 **Quotes**: By default, parameter values are split using whitespace characters. ie, `mycommand 1 2` will call `mycommand` with the arguments `1` and `2`. Another augmentation of
-DxCommandTerminal is the ability to capture spaces, or any normally-ignored character as input, as long as they're surrounded by any of the characters found in the `Quotes` set. If
-there is a chunk of text that starts with a character found in the `Quotes` set, but has no matching terminating character, the input string from the first quote character to the
-end is considered as one parameter. For example, `my command "1 2"` will call `mycommand` with a single argument of `"1 2"`.
+DxTerminal is the ability to capture spaces, or any normally-ignored character as input, as long as they're surrounded by any of the characters found in the `Quotes` set. If there
+is a chunk of text that starts with a character found in the `Quotes` set, but has no matching terminating character, the input string from the first quote character to the end is
+considered as one parameter. For example, `my command "1 2"` will call `mycommand` with a single argument of `"1 2"`.
 
 **IgnoredValuesForCleanedTypes**: For cleaned types, string sequences in this set will be replaced with the empty string.
 
@@ -651,7 +651,7 @@ always has.
 
 # New Input System
 
-DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled.
+DxTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled.
 
 You can also use `PlayerInput` or similar to bind InputActions to all available command terminal behavior. The available message are:
 

@@ -4,8 +4,8 @@ Runnable examples for the typed command builder. Every component registers its c
 
 ## Import
 
-Package Manager > DxCommandTerminal > Samples > Import. Requires a scene with a `TerminalUI` component (the commands register into its shell). Component enable order is undefined:
-if a sample enables before the TerminalUI builds its shell, it logs an error and skips registration - keep the sample components in a scene with a TerminalUI.
+Package Manager > DxTerminal > Samples > Import. Requires a scene with a `TerminalUI` component (the commands register into its shell). Component enable order is undefined: if a
+sample enables before the TerminalUI builds its shell, it logs an error and skips registration - keep the sample components in a scene with a TerminalUI.
 
 ## Components
 
