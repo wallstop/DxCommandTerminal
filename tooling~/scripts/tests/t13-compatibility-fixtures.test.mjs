@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runUnityProcess } from "../release/import-drill.mjs";
 import { exportUnityPackage } from "../release/export-unitypackage.mjs";
-import { makeFixturePackage } from "./support/fixture-package.mjs";
+import { persistentFixturePackage } from "./support/fixture-package.mjs";
 import {
   applyCanonicalInputProfile,
   readInputHandler,
@@ -245,7 +245,7 @@ test("matrix manifests record complete identity and reject stale reports", async
       two builds of the real tree.
    */
   const source = JSON.parse(fs.readFileSync(path.resolve(TOOLING_ROOT, "..", "package.json"), "utf8"));
-  const packageRoot = makeFixturePackage(temporaryRoot("package"), { name: source.name, version: source.version });
+  const packageRoot = persistentFixturePackage({ name: source.name, version: source.version });
   const artifact = exportUnityPackage({ packageRoot, out: "", cache: true });
   fs.writeFileSync(artifactPath, artifact.buffer);
   const out = path.join(root, "reports");
