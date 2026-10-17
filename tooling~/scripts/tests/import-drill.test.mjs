@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { makeFixturePackage } from "./support/fixture-package.mjs";
+import { persistentFixturePackage } from "./support/fixture-package.mjs";
 
 const drillScript = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -886,9 +886,13 @@ test("the reader parses an exporter artifact", async () => {
       input-system-referencing assembly, the Analyzers/ payload, the
       Samples~ exclusion - without paying the real tree's whole-package
       export (the real tree keeps one owner, export-unitypackage-real).
+      The root persists (the #312 pattern) and the export asks for the
+      cache, so a warm run hands the reader a real exporter artifact with
+      no `npm pack` spawn and no rebuild; the bytes are the build's own
+      because the cache test pins cached-equals-fresh.
    */
-  const packageRoot = makeFixturePackage(tempRoot("reader"), { name: "reader.pkg", version: "0.3.0" });
-  const { buffer } = exporter.exportUnityPackage({ packageRoot, out: "" });
+  const packageRoot = persistentFixturePackage({ name: "reader.pkg", version: "0.3.0" });
+  const { buffer } = exporter.exportUnityPackage({ packageRoot, out: "", cache: true });
   const artifact = listArtifact(buffer);
   assert.strictEqual(artifact.root, "Packages/reader.pkg");
   assert.ok(artifact.assets.length > 5, "the artifact must carry the packaged tree");
