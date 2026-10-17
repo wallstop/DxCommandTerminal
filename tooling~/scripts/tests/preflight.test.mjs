@@ -234,6 +234,22 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     assert.equal(gate.cacheNpmConfig, true, `${gate.name} spawns npm pack`);
   }
   assert.equal(csharpCheck.cacheUv, undefined, "no tree-keyed member spawns uv");
+  const pythonTests = checks.find((check) => check.name === "python-tests");
+  assert.equal(pythonTests.cache, undefined, "python-tests keys its suite and module bytes");
+  assert.equal(pythonTests.startBeforeCache, undefined, "python-tests keys before running");
+  assert.equal(pythonTests.cachePython, true, "the suites run under the resolved python");
+  assert.deepEqual(pythonTests.cachePaths, [
+    ".devcontainer",
+    "tooling~/scripts/t13",
+    "tooling~/scripts/tests",
+    "tooling~/compat/player-smoke"
+  ]);
+  const devcontainerContract = checks.find((check) => check.name === "devcontainer-contract");
+  assert.equal(devcontainerContract.cache, undefined, "devcontainer-contract keys its suite bytes");
+  assert.equal(devcontainerContract.startBeforeCache, undefined, "devcontainer-contract keys before running");
+  assert.equal(devcontainerContract.cachePython, true);
+  assert.equal(devcontainerContract.cacheBash, true, "the devcontainer suite drives bash scripts");
+  assert.deepEqual(devcontainerContract.cachePaths, [".devcontainer", "tooling~/scripts/tests/test_devcontainer.py"]);
   assert.deepEqual(csharpCheck.cachePaths, [
     "Runtime",
     "Editor",
@@ -325,6 +341,29 @@ test("cacheUv folds the uv runtime into the key only for checks that declare it"
     keyOf(base, "uv 1.0", "state-a"),
     keyOf(base, "uv 2.0", "state-b"),
     "a check that never spawns uv must not key it"
+  );
+});
+
+test("cachePython folds the python runtime into the key only for checks that declare it", () => {
+  const base = { name: "python-gate", command: "python3 probe.py" };
+  const withPython = { ...base, cachePython: true };
+  const context = createCacheContext();
+  const keyOf = (check, python, pythonExecutable) =>
+    cacheKeyForCheck(check, { ...context, python, pythonExecutable });
+  assert.notEqual(
+    keyOf(withPython, "Python 3.11.9", "state-a"),
+    keyOf(withPython, "Python 3.12.3", "state-a"),
+    "a python upgrade must move the key"
+  );
+  assert.notEqual(
+    keyOf(withPython, "Python 3.12.3", "state-a"),
+    keyOf(withPython, "Python 3.12.3", "state-b"),
+    "a python executable move must move the key"
+  );
+  assert.equal(
+    keyOf(base, "Python 3.11.9", "state-a"),
+    keyOf(base, "Python 3.12.3", "state-b"),
+    "a check that never spawns python must not key it"
   );
 });
 
@@ -1565,7 +1604,7 @@ test("main: uncached integration checks reject stale passes after environment ch
     fs.appendFileSync(${JSON.stringify(marker)}, "x");
     process.exit(process.env.UV_PROJECT_ENVIRONMENT === "broken-environment" ? 1 : 0);
   `);
-  const check = { ...buildChecks().find((candidate) => candidate.name === "python-tests"), command: `node "${subject}"` };
+  const check = { name: "integration-probe", command: `node "${subject}"`, cache: false };
   const originalCi = process.env.CI;
   const originalEnvironment = process.env.UV_PROJECT_ENVIRONMENT;
   const originalLog = console.log;
@@ -1587,7 +1626,7 @@ test("main: uncached integration checks reject stale passes after environment ch
     process.env.UV_PROJECT_ENVIRONMENT = "broken-environment";
     assert.equal(await main([], [check]), 1, "surface the changed child outcome");
     assert.equal(fs.readFileSync(marker, "utf8"), "xxx");
-    assert.ok(!lines.some((line) => line.includes("cached python-tests")));
+    assert.ok(!lines.some((line) => line.includes("cached integration-probe")));
   } finally {
     if (key !== undefined) clearCacheForCheck(check, key);
     console.log = originalLog;

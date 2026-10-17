@@ -51,8 +51,8 @@ Restore tools first (`dotnet tool restore`) - the `dotnet-tool-restore` pre-comm
 - A change outside a check's declared inputs may reuse its cache. A change inside one must invalidate it.
 - Hash installed dependency and tool contents, not only lockfiles or version strings. Disable caching when an opaque external input cannot be fingerprinted.
 - The node suite runs as two cached gates (`node-tests-tooling`, `node-tests-csharp`) with per-file input enumeration (#307): assign each new suite file to the gate whose key spans
-  its read surface, and put a file whose inputs reach outside `tooling~` in `node-tests-csharp` - worst case it re-runs, and a stale pass is the hazard that matters. `python-tests`
-  stays uncached: its suites read external uv/python configuration.
+  its read surface, and put a file whose inputs reach outside `tooling~` in `node-tests-csharp` - worst case it re-runs, and a stale pass is the hazard that matters. The python
+  gates (`python-tests`, `devcontainer-contract`) key the suite files, the modules they exercise, and the python runtime (`cachePython`).
 - Opt into `startBeforeCache` only when fixture writes stay outside every other gate's inputs; cache-ineligible checks otherwise wait for keying.
 - Environment inputs are per check. Key raw values, path contents, and effective config files only when the child command reads them.
 - Add a contract test for every new input category. Cover content changes, ignored files, missing paths, generated symlinks, dependencies, tools, and config.

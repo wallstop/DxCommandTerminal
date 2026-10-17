@@ -644,6 +644,11 @@ function commandVersion(command, args) {
   }
 }
 
+/** The interpreter the python gates and CI's python steps both resolve. */
+function pythonCommand() {
+  return process.platform === "win32" ? "python" : "python3";
+}
+
 function gitTrackedState() {
   return hashText(
     execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8" })
@@ -778,6 +783,8 @@ export function createCacheContext() {
   lazy(context, "dotnetExecutable", () => resolvedExecutableState("dotnet"));
   lazy(context, "uv", () => commandVersion("uv", ["--version"]));
   lazy(context, "uvExecutable", () => resolvedExecutableState("uv"));
+  lazy(context, "python", () => commandVersion(pythonCommand(), ["--version"]));
+  lazy(context, "pythonExecutable", () => resolvedExecutableState(pythonCommand()));
   lazy(context, "git", () => commandVersion("git", ["--version"]));
   lazy(context, "gitExecutable", () => resolvedExecutableState("git"));
   lazy(context, "tar", () => commandVersion("tar", ["--version"]));
@@ -925,6 +932,8 @@ function buildCacheKey(check, context, sources) {
     `dotnet-executable=${check.cacheDotnet === true ? context.dotnetExecutable ?? "" : ""}`,
     `uv=${check.cacheUv === true ? context.uv ?? "" : ""}`,
     `uv-executable=${check.cacheUv === true ? context.uvExecutable ?? "" : ""}`,
+    `python=${check.cachePython === true ? context.python ?? "" : ""}`,
+    `python-executable=${check.cachePython === true ? context.pythonExecutable ?? "" : ""}`,
     `git=${check.cacheGit === true ? context.git : ""}`,
     `git-executable=${check.cacheGit === true ? context.gitExecutable ?? "" : ""}`,
     `tar=${check.cacheTar === true ? context.tar : ""}`,

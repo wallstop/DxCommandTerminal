@@ -1,7 +1,9 @@
 [project]
 # The typed-python surface for the repo's script tooling (issue #220).
-# Ports cover skill sizes, Unity metas, and skills-index generation; the
-# remaining scripts are the bash devcontainer contract tests.
+# Ports cover skill sizes, Unity metas, skills-index generation, the
+# instruction linters, OpenCode readiness, env autoload, analyzer payload
+# verification, and the devcontainer contract suite; the remaining scripts
+# are test-ai-backends.sh and the .devcontainer/*.sh lifecycle entries.
 # Runtime dependencies stay empty - the scripts are standard library only,
 # so `uv run` only needs to resolve the interpreter, and CI needs nothing
 # beyond setup-python plus uv itself. The node tooling next door pins exact
