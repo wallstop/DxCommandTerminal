@@ -128,36 +128,26 @@ jobs:
       - name: Test tooling
         run: npm --prefix tooling~ test
 
-      - name: Test OpenCode readiness
-        run: python -m unittest discover -s tooling~/scripts/tests -p test_verify_opencode.py
+      - name: Test player evidence suites
+        # One interpreter for all four suites (same modules and order as the
+        # preflight python-tests gate): unittest aggregates the module list,
+        # any suite failure still fails the step, and three fewer steps of
+        # per-step overhead leave both legs sooner.
+        working-directory: tooling~/scripts/tests
+        run: python -m unittest test_verify_opencode test_player_smoke test_player_readiness test_webgl_player
 
-      - name: Test player evidence validation
-        run: python -m unittest discover -s tooling~/scripts/tests -p test_player_smoke.py
-
-      - name: Test player readiness evidence
-        run: python -m unittest discover -s tooling~/scripts/tests -p test_player_readiness.py
-
-      - name: Test WebGL report protocol
-        run: python -m unittest discover -s tooling~/scripts/tests -p test_webgl_player.py
-
-      - name: Test AI backends
+      - name: Check shell entry syntax
+        # One file per call: `bash -n a b` checks a and passes b as arguments.
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          # One file per call: `bash -n a b` checks a and passes b as arguments.
-          for script in .devcontainer/*.sh; do bash -n "${script}"; done
-          bash tooling~/scripts/tests/test-ai-backends.sh
+        run: for script in .devcontainer/*.sh; do bash -n "${script}"; done
 
-      - name: Test environment autoload migration
+      - name: Test devcontainer python contracts
+        # The devcontainer-facing suites in one interpreter. All four drive
+        # bash scripts, so they stay on the ubuntu leg: the contract suites
+        # skip themselves on Windows, and the installer suite imports fcntl.
         if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest discover -s tooling~/scripts/tests -p test_install_env_autoload.py
-
-      - name: Test agent CLI installer
-        if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest discover -s tooling~/scripts/tests -p test_install_agent_clis.py
-
-      - name: Test devcontainer contract
-        if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest discover -s tooling~/scripts/tests -p test_devcontainer.py
+        working-directory: tooling~/scripts/tests
+        run: python -m unittest test_devcontainer test_ai_backends test_install_agent_clis test_install_env_autoload
 
       - name: Check capture baselines
         # T11 Unity-free integrity gate: baseline schema, scenario coverage,

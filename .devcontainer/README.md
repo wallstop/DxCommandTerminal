@@ -127,7 +127,7 @@ and restart the agents' MCP connections.
   stdio MCP servers.
 
 Z.AI overrides: `CODEX_ZAI_MODEL`, `CODEX_ZAI_REASONING_EFFORT`, `CLAUDE_ZAI_*_MODEL`, `ZAI_API_TIMEOUT_MS` (default 3000000, matching the GLM coding-plan guidance),
-`CLAUDE_ZAI_CONFIG_DIR`, `AI_BACKENDS_CONTAINER_MODE`, `CLAUDE_ZAI_SUBPROCESS_ENV_SCRUB`. The launchers are regression-tested (`tooling~/scripts/tests/test-ai-backends.sh`).
+`CLAUDE_ZAI_CONFIG_DIR`, `AI_BACKENDS_CONTAINER_MODE`, `CLAUDE_ZAI_SUBPROCESS_ENV_SCRUB`. The launchers are regression-tested (`tooling~/scripts/tests/test_ai_backends.py`).
 
 ### OpenRouter (API key, any model)
 
@@ -163,7 +163,7 @@ and verifies the image the first time, in CI.
 
 ```bash
 npm test                                   # node --test tooling~/scripts/mcp/__tests__
-bash tooling~/scripts/tests/test-ai-backends.sh     # Z.AI launcher regression suite
+python3 -m unittest discover -s tooling~/scripts/tests -p test_ai_backends.py   # Z.AI launcher regression suite
 python3 -m unittest discover -s tooling~/scripts/tests -p test_devcontainer.py   # OpenCode v2 build contract
 npm run unity:mcp:probe                    # host editor readiness (bridge running)
 ```

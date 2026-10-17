@@ -251,21 +251,30 @@ export function buildChecks() {
     },
     {
       /*
-          CI's ubuntu-only devcontainer contract step: the typed port of the
-          retired test-devcontainer.sh (issue #220). The suite drives the
-          real .devcontainer lifecycle scripts through /bin/bash with
-          stubbed CLIs, so it skips itself on Windows exactly where CI
-          gates the step to one leg. Keys: the whole .devcontainer
-          directory (every script and baked config the suite reads or
-          copies), the suite file, bash, and the python runtime.
+          CI's ubuntu-only devcontainer contract step: the typed ports of
+          the retired test-devcontainer.sh and test-ai-backends.sh
+          (issue #220). The suites drive the real .devcontainer scripts
+          through /bin/bash with stubbed CLIs, so they skip themselves on
+          Windows exactly where CI gates the step to one leg. Keys: the
+          whole .devcontainer directory (every script and baked config the
+          suites read or copy), both suite files, bash, and the python
+          runtime. Stated coin: a new suite helper imported from the tests
+          directory without touching either suite file ages a cached pass
+          until the next keyed edit - the sibling python-tests gate keys
+          the whole tests directory instead and pays that over-invalidation
+          on every suite edit.
        */
       name: "devcontainer-contract",
       cwd: "tooling~/scripts/tests",
-      command: `${pythonCommand} -m unittest test_devcontainer`,
+      command: `${pythonCommand} -m unittest test_devcontainer test_ai_backends`,
       cachePython: true,
       cacheBash: true,
       cacheRuntimeEnvironment: true,
-      cachePaths: [".devcontainer", "tooling~/scripts/tests/test_devcontainer.py"]
+      cachePaths: [
+        ".devcontainer",
+        "tooling~/scripts/tests/test_devcontainer.py",
+        "tooling~/scripts/tests/test_ai_backends.py"
+      ]
     },
     {
       name: "t11-check",

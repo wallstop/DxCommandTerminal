@@ -249,7 +249,11 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   assert.equal(devcontainerContract.startBeforeCache, undefined, "devcontainer-contract keys before running");
   assert.equal(devcontainerContract.cachePython, true);
   assert.equal(devcontainerContract.cacheBash, true, "the devcontainer suite drives bash scripts");
-  assert.deepEqual(devcontainerContract.cachePaths, [".devcontainer", "tooling~/scripts/tests/test_devcontainer.py"]);
+  assert.deepEqual(devcontainerContract.cachePaths, [
+    ".devcontainer",
+    "tooling~/scripts/tests/test_devcontainer.py",
+    "tooling~/scripts/tests/test_ai_backends.py"
+  ]);
   assert.deepEqual(csharpCheck.cachePaths, [
     "Runtime",
     "Editor",
@@ -321,10 +325,24 @@ test("node suite split: every suite file is assigned to exactly one gate", () =>
   }
 });
 
+/*
+    One lazily-resolved context for the fold tests that fabricate their own
+    runtime values into a spread copy. Each fold test used to build its own
+    context, so the fields keyFor reads (the tracked snapshot, executable
+    states, dependency bytes) resolved twice on the node suite's critical
+    path; the base context is read-only input, and the fabricated fields
+    never touch it, so sharing cannot change what either test observes.
+ */
+let foldContext;
+function sharedFoldContext() {
+  if (foldContext === undefined) foldContext = createCacheContext();
+  return foldContext;
+}
+
 test("cacheUv folds the uv runtime into the key only for checks that declare it", () => {
   const base = { name: "uv-gate", command: "node probe.mjs" };
   const withUv = { ...base, cacheUv: true };
-  const context = createCacheContext();
+  const context = sharedFoldContext();
   const keyOf = (check, uv, uvExecutable) =>
     cacheKeyForCheck(check, { ...context, uv, uvExecutable });
   assert.notEqual(
@@ -347,7 +365,7 @@ test("cacheUv folds the uv runtime into the key only for checks that declare it"
 test("cachePython folds the python runtime into the key only for checks that declare it", () => {
   const base = { name: "python-gate", command: "python3 probe.py" };
   const withPython = { ...base, cachePython: true };
-  const context = createCacheContext();
+  const context = sharedFoldContext();
   const keyOf = (check, python, pythonExecutable) =>
     cacheKeyForCheck(check, { ...context, python, pythonExecutable });
   assert.notEqual(
