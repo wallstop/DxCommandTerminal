@@ -504,7 +504,7 @@ namespace DxTerminalDevTools
             object buffer = bufferProperty?.GetValue(null);
             if (buffer == null)
             {
-                error = "DxCommandTerminal Terminal.Buffer is not available in this project.";
+                error = "DxTerminal Terminal.Buffer is not available in this project.";
                 return 0;
             }
 
