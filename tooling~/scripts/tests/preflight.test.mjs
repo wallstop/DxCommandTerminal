@@ -249,7 +249,11 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   assert.equal(devcontainerContract.startBeforeCache, undefined, "devcontainer-contract keys before running");
   assert.equal(devcontainerContract.cachePython, true);
   assert.equal(devcontainerContract.cacheBash, true, "the devcontainer suite drives bash scripts");
-  assert.deepEqual(devcontainerContract.cachePaths, [".devcontainer", "tooling~/scripts/tests/test_devcontainer.py"]);
+  assert.deepEqual(devcontainerContract.cachePaths, [
+    ".devcontainer",
+    "tooling~/scripts/tests/test_devcontainer.py",
+    "tooling~/scripts/tests/test_ai_backends.py"
+  ]);
   assert.deepEqual(csharpCheck.cachePaths, [
     "Runtime",
     "Editor",
