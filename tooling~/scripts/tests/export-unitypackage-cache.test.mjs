@@ -16,7 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { artifactCacheKey, exportUnityPackage, readCachedArtifact } from "../release/export-unitypackage.mjs";
-import { persistentFixturePackage } from "./support/fixture-package.mjs";
+import { fixtureRelativePaths, persistentFixturePackage } from "./support/fixture-package.mjs";
 import { readArtifact } from "./support/unitypackage-artifact.mjs";
 
 const exporterHref = pathToFileURL(
@@ -95,6 +95,36 @@ test("a packaged edit re-exports; an excluded edit does not", async () => {
    */
   fs.writeFileSync(path.join(packageRoot, "Runtime", "Foo.cs"), "// foo\n");
   fs.writeFileSync(path.join(packageRoot, "Runtime", "Analyzers", "Payload.dll"), "binary payload\n");
+});
+
+test("fixture materialization never stages inside the packaged tree", () => {
+  /*
+      The materializer rewrites via rename-into-place; the staging file must
+      live outside the `files` allowlist (under .artifacts/) because a
+      staged sibling inside Runtime/ is walkable - npm pack ships it
+      without a meta and the export throws, live or as a crash leftover.
+      Dirtying a file forces a real rewrite, then the packaged tree (the
+      root minus .artifacts/) must equal the canonical set exactly - the
+      same no-tmp-leak invariant the MCP config writer's tests pin.
+   */
+  const packageRoot = mutablePackage();
+  fs.writeFileSync(path.join(packageRoot, "Runtime", "Foo.cs"), "// dirty, forces a rewrite\n");
+  persistentFixturePackage({ name: "cache.pkg", version: "0.2.0", variant: "edits" });
+  const present = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === ".artifacts") continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(absolute);
+      else present.push(path.relative(packageRoot, absolute).split(path.sep).join("/"));
+    }
+  };
+  visit(packageRoot);
+  assert.deepStrictEqual(
+    present.sort(),
+    fixtureRelativePaths({ name: "cache.pkg", version: "0.2.0" }).sort(),
+    "materialization leaves exactly the canonical packaged tree; no staging siblings"
+  );
 });
 
 test("an entry whose bytes betray their digest is a miss, never an answer", () => {

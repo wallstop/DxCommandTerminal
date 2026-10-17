@@ -74,6 +74,17 @@ export function persistentFixturePackage({ name = "test.pkg", version = "0.1.0",
   }
   const root = path.join(os.tmpdir(), "dxct-fixture-packages", identity.digest("hex").slice(0, 16));
   fs.mkdirSync(root, { recursive: true });
+  /*
+      Staging lives under `.artifacts/`, outside the `files` allowlist: a
+      staged sibling inside `Runtime/` (or beside any packaged file) is
+      walkable - npm pack would ship it without a meta and the export
+      would throw, live or as a crash leftover. The exporter's own cache
+      stages under `.artifacts/export-cache/` for the same reason. A
+      staging file left by a killed process is inert there: nothing walks
+      the directory, and the bytes are a few hundred per file.
+   */
+  const staging = path.join(root, ".artifacts", "fixture-staging");
+  fs.mkdirSync(staging, { recursive: true });
   for (const [relative, content] of files) {
     const target = path.join(root, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -87,11 +98,27 @@ export function persistentFixturePackage({ name = "test.pkg", version = "0.1.0",
         suite process (a second worktree on this machine) can never hand a
         reader a half-written fixture file.
      */
-    const staged = `${target}.${process.pid}.tmp`;
-    fs.writeFileSync(staged, content);
-    fs.renameSync(staged, target);
+    const stagedFile = path.join(
+      staging,
+      `${process.pid}-${crypto.createHash("sha256").update(relative).digest("hex").slice(0, 12)}.tmp`
+    );
+    try {
+      fs.writeFileSync(stagedFile, content);
+      fs.renameSync(stagedFile, target);
+    } catch (error) {
+      fs.rmSync(stagedFile, { force: true });
+      throw error;
+    }
   }
   return root;
+}
+
+/*
+    The canonical packaged paths of one fixture shape, for tests that pin
+    what materialization is allowed to leave on disk.
+ */
+export function fixtureRelativePaths({ name = "test.pkg", version = "0.1.0" } = {}) {
+  return fixtureFileBodies({ name, version }).map(([relative]) => relative);
 }
 
 function fixtureFileBodies({ name, version }) {
