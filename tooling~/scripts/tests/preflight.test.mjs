@@ -245,6 +245,8 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     "tooling~/compat/player-smoke"
   ]);
   const devcontainerContract = checks.find((check) => check.name === "devcontainer-contract");
+  assert.equal(devcontainerContract.cache, undefined, "devcontainer-contract keys its suite bytes");
+  assert.equal(devcontainerContract.startBeforeCache, undefined, "devcontainer-contract keys before running");
   assert.equal(devcontainerContract.cachePython, true);
   assert.equal(devcontainerContract.cacheBash, true, "the devcontainer suite drives bash scripts");
   assert.deepEqual(devcontainerContract.cachePaths, [".devcontainer", "tooling~/scripts/tests/test_devcontainer.py"]);

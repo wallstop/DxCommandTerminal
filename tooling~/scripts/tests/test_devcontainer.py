@@ -264,6 +264,8 @@ class BakedConfigurationContract(unittest.TestCase):
             re.search(r"(?:^|\s)2\.", text, re.MULTILINE),
             "the pre-fix OpenCode version expression remains",
         )
+        # The live regex is the guard the retired fixed-string grep never
+        # was: any "2." version pin in the Dockerfile fails this suite.
 
 
 @SKIP_ON_WINDOWS
