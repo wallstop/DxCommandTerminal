@@ -523,7 +523,8 @@ empty string.
 Each set also has a setter - `CommandArg.SetDelimiters(...)`, `SetQuotes(...)`, `SetIgnoredValuesForCleanedTypes(...)`, `SetDoNotCleanTypes(...)`, and
 `SetIgnoredValuesForComplexTypes(...)` - that replaces the contents in place, and `CommandArg.ResetParsingConfiguration()` restores all five to their defaults. The play-session
 reset applies that same restore, so a game that re-applies its configuration per session calls the setters again in `Awake` or a `RuntimeInitializeOnLoadMethod` hook.
-`CommandArg.AddQuote(...)` appends one quote character to the `Quotes` set in place, for a game that wants an extra quote without touching the defaults.
+`CommandArg.AddQuote(...)` appends one quote character to the `Quotes` set in place, for a game that wants an extra quote without touching the defaults; the reset removes it like
+any other edit.
 
 # Hotkeys
 

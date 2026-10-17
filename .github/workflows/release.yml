@@ -316,7 +316,7 @@ jobs:
           # next) must never become GitHub "Latest", so they carry
           # --prerelease explicitly (gh does not infer it from the tag).
           node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$RELEASE_SHA"
-          args=(--verify-tag --draft --title "DxCommandTerminal ${{ needs.verify.outputs.version }}" --notes-file release-notes.md)
+          args=(--verify-tag --draft --title "DxTerminal ${{ needs.verify.outputs.version }}" --notes-file release-notes.md)
           if [ "${{ needs.verify.outputs.dist-tag }}" = "next" ]; then
             args+=(--prerelease)
           fi

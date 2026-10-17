@@ -3288,6 +3288,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandArg.AddQuote('^');
 
             Assert.AreSame(quotes, CommandArg.Quotes, "AddQuote must mutate the list readers already hold, not replace it");
+            Assert.AreEqual(3, CommandArg.Quotes.Count, "A duplicate add must not grow the list");
             CollectionAssert.AreEquivalent(new[] { '"', '\'', '^' }, CommandArg.Quotes, $"Quotes after a duplicate add: [{string.Join(string.Empty, CommandArg.Quotes)}]");
         }
 

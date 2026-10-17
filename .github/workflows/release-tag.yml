@@ -73,7 +73,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "DxCommandTerminal $VERSION"
+          git tag -a "$TAG" -m "DxTerminal $VERSION"
           # Route the push through gh's credential helper instead of a
           # token-bearing URL, so a failed push can never echo credentials
           # into the public job log. persist-credentials stays false.
