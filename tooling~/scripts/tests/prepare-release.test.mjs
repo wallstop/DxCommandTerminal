@@ -35,7 +35,7 @@ function tempRoot(label) {
 const FIXTURE_PACKAGE = `{
   "name": "com.wallstop-studios.dxcommandterminal",
   "version": "1.0.0-rc25.0",
-  "displayName": "DxCommandTerminal"
+  "displayName": "DxTerminal"
 }
 `;
 const FIXTURE_CHANGELOG = [
@@ -253,7 +253,7 @@ test("tag-gate warns with fallback commands and emits no tag output", () => {
     output
   ]).toString();
   assert.match(stdout, /::warning::.*documents 1\.0\.0-rc25\.0 but the push subject is not/);
-  assert.strictEqual(FALLBACK_COMMANDS("v1.0.0-rc25.0", "1.0.0-rc25.0")[0], 'git tag -a v1.0.0-rc25.0 -m "DxCommandTerminal 1.0.0-rc25.0"');
+  assert.strictEqual(FALLBACK_COMMANDS("v1.0.0-rc25.0", "1.0.0-rc25.0")[0], 'git tag -a v1.0.0-rc25.0 -m "DxTerminal 1.0.0-rc25.0"');
   assert.strictEqual(fs.readFileSync(output, "utf8"), "action=warn\nversion=1.0.0-rc25.0\ntag=v1.0.0-rc25.0\n");
 });
 

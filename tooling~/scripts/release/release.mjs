@@ -327,7 +327,7 @@ const PUBLISH_GATE_OPTIONS = {
   "--github-output": "githubOutput"
 };
 const FALLBACK_COMMANDS = (tag, version) => [
-  `git tag -a ${tag} -m "DxCommandTerminal ${version}"`,
+  `git tag -a ${tag} -m "DxTerminal ${version}"`,
   `git push origin ${tag}`
 ];
 
