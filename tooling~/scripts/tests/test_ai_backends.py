@@ -641,6 +641,7 @@ class EnvExportsContract(BackendsTestCase):
             ["/bin/bash", "-c", f"set -e; . '{eval_script}'; test \"${{ZAI_API_KEY}}\" = 'env-only-zai'"],
             capture_output=True,
             text=True,
+            env=self.env(),
             timeout=120,
         )
         self.assertEqual(evaluated.returncode, 0, "env output evaluates and sets the variable")
@@ -746,10 +747,10 @@ class PostCreateAutoloadContract(BackendsTestCase):
             self.assertTrue(rc_path.is_file(), f"{rc_name} exists")
             rc = rc_path.read_text(encoding="utf-8")
             with self.subTest(rc=rc_name):
-                self.assertEqual(
-                    rc.count("dxcommandterminal .env.local autoload"), 2,
-                    f"{rc_name} has exactly one autoload block",
-                )
+                # grep -c semantics: matching LINES, not substring hits, so
+                # both markers collapsed onto one line cannot pass.
+                marker_lines = sum(1 for line in rc.splitlines() if "dxcommandterminal .env.local autoload" in line)
+                self.assertEqual(marker_lines, 2, f"{rc_name} has exactly one autoload block")
         bashrc = (home / ".bashrc").read_text(encoding="utf-8")
         self.assertIn(f"DXT_WORKSPACE_ROOT='{autoload_root}'", bashrc, "bashrc block pins the workspace root")
         self.assertIn(

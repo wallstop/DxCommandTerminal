@@ -142,10 +142,9 @@ jobs:
         run: for script in .devcontainer/*.sh; do bash -n "${script}"; done
 
       - name: Test devcontainer python contracts
-        # The devcontainer-facing suites in one interpreter: the lifecycle
-        # contract port, the Z.AI/OpenRouter launcher suite, the autoload
-        # migration, and the agent CLI installer (the last two drive bash
-        # scripts, so they stay on the ubuntu leg with bash).
+        # The devcontainer-facing suites in one interpreter. All four drive
+        # bash scripts, so they stay on the ubuntu leg: the contract suites
+        # skip themselves on Windows, and the installer suite imports fcntl.
         if: matrix.os == 'ubuntu-latest'
         working-directory: tooling~/scripts/tests
         run: python -m unittest test_devcontainer test_ai_backends test_install_agent_clis test_install_env_autoload

@@ -258,7 +258,11 @@ export function buildChecks() {
           Windows exactly where CI gates the step to one leg. Keys: the
           whole .devcontainer directory (every script and baked config the
           suites read or copy), both suite files, bash, and the python
-          runtime.
+          runtime. Stated coin: a new suite helper imported from the tests
+          directory without touching either suite file ages a cached pass
+          until the next keyed edit - the sibling python-tests gate keys
+          the whole tests directory instead and pays that over-invalidation
+          on every suite edit.
        */
       name: "devcontainer-contract",
       cwd: "tooling~/scripts/tests",
