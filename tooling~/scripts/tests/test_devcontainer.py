@@ -2,9 +2,10 @@
 
 Ports `test-devcontainer.sh` to typed stdlib Python: the OpenCode verifier
 gate, the baked configuration contract, the npm range resolver, the shell
-delegator, and the full post-start lifecycle with stubbed CLIs. The suite
-drives the real `.devcontainer` scripts through subprocesses with a sanitized
-PATH, so a regression fails here before a container build does.
+delegator, and the full post-start lifecycle with stubbed CLIs. The lifecycle
+flow itself (`post_start.py`) is typed too; the suite drives it through the
+real `.devcontainer` entries via subprocesses with a sanitized PATH, so a
+regression fails here before a container build does.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ DOCKERFILE = REPO_ROOT / ".devcontainer" / "Dockerfile"
 INSTALLER = REPO_ROOT / ".devcontainer" / "install-agent-clis.sh"
 INSTALLER_PY = REPO_ROOT / ".devcontainer" / "install_agent_clis.py"
 POST_START = REPO_ROOT / ".devcontainer" / "post-start.sh"
+POST_START_PY = REPO_ROOT / ".devcontainer" / "post_start.py"
 VERIFY_SCRIPT = REPO_ROOT / ".devcontainer" / "verify-opencode.sh"
 
 # The checkout's credentials and the loader's own control variables must not
@@ -98,17 +100,6 @@ if [[ "$*" == *"configure --offline"* && ! -f .env.local ]]; then
 fi
 """
 
-STUB_TIMEOUT = """#!/usr/bin/env bash
-if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
-    shift
-fi
-exec "$@"
-"""
-
-STUB_SLEEP = """#!/usr/bin/env bash
-exit 0
-"""
-
 STUB_OPENCODE = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> opencode-calls.txt
 case "${1:-}" in
@@ -121,6 +112,7 @@ case "${1:-}" in
                     printf 'UNITY=%s\\n' "${UNITY_MCP_BEARER_TOKEN-<unset>}"
                     printf 'GITHUB=%s\\n' "${GITHUB_TOKEN-<unset>}"
                     printf 'ZAI=%s\\n' "${ZAI_API_KEY-<unset>}"
+                    printf 'BASH_ENV=%s\\n' "${BASH_ENV-<unset>}"
                 } > service-token.txt
                 ;;
             stop) : ;;
@@ -128,7 +120,15 @@ case "${1:-}" in
         ;;
     mcp)
         if [[ "${2:-}" == "list" ]]; then
-            if [[ "${DXT_FAKE_MCP_FAILURE:-0}" == "1" ]]; then
+            if [[ "${DXT_FAKE_MCP_STDERR:-0}" == "1" ]]; then
+                # The CLI reports the failed server on stderr, exit nonzero.
+                printf '%s\\n' '✗ unity-mcp failed: Unauthorized' >&2
+                exit 1
+            elif [[ "${DXT_FAKE_MCP_MULTIROW:-0}" == "1" ]]; then
+                # A healthy project row next to a rejected stale one.
+                printf '%s\\n' '✓ unity-mcp connected'
+                printf '%s\\n' '✗ unity-mcp failed: Unauthorized'
+            elif [[ "${DXT_FAKE_MCP_FAILURE:-0}" == "1" ]]; then
                 printf '%s\\n' '✗ unity-mcp failed: Unauthorized'
             elif [[ "${DXT_FAKE_OTHER_MCP_FAILURE:-0}" == "1" ]]; then
                 # A healthy unity bridge next to a failing optional server.
@@ -234,14 +234,18 @@ class BakedConfigurationContract(unittest.TestCase):
                 self.assertIn(expected, text)
         self.assertNotIn('"BASH_ENV"', text, "devcontainer must not inject credentials into every Bash subprocess")
 
-    def test_post_start_wires_the_autoload_and_service_restart(self) -> None:
-        text = POST_START.read_text(encoding="utf-8")
+    def test_post_start_delegates_to_the_typed_flow(self) -> None:
+        shim = POST_START.read_text(encoding="utf-8")
+        self.assertIn("exec python3", shim, "post-start.sh must stay a thin shim over the typed entry")
+        self.assertIn("post_start.py", shim)
+        text = POST_START_PY.read_text(encoding="utf-8")
         for expected in (
-            'source "${SCRIPT_DIR}/env-autoload.sh"',
-            "unset BASH_ENV",
-            "opencode service status",
-            "opencode service restart",
-            "Unauthorized",
+            '"BASH_ENV"',
+            '"ai-backends.sh"',
+            '"configure", "--offline"',
+            '"service", "status"',
+            '"service", "restart"',
+            "Unauthorized|Authorization header|401|forbidden",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
@@ -266,6 +270,35 @@ class BakedConfigurationContract(unittest.TestCase):
         )
         # The live regex is the guard the retired fixed-string grep never
         # was: any "2." version pin in the Dockerfile fails this suite.
+
+
+@SKIP_ON_WINDOWS
+class EnvExportParsingContract(unittest.TestCase):
+    """The autoload parses `ai-backends.sh env` output as data, never sourced."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        spec = importlib.util.spec_from_file_location("dxt_post_start", POST_START_PY)
+        assert spec is not None and spec.loader is not None
+        cls.post_start = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.post_start)
+
+    def parse(self, text: str) -> Dict[str, str]:
+        environment: Dict[str, str] = {}
+        self.post_start.apply_env_exports(text, environment)
+        return environment
+
+    def test_single_quoted_values_apply_with_escaped_quotes_decoded(self) -> None:
+        self.assertEqual(self.parse("export KEY='a'\\''b'\n"), {"KEY": "a'b"})
+
+    def test_a_multi_line_value_is_skipped_whole(self) -> None:
+        # The producer wraps a newline-bearing value across lines; applying
+        # the first fragment would corrupt the credential, so the record is
+        # refused in full.
+        self.assertEqual(self.parse("export GOOD='a'\nexport BAD='b'\\''\nc'\n"), {"GOOD": "a"})
+
+    def test_non_export_lines_are_ignored(self) -> None:
+        self.assertEqual(self.parse("# comment\nnope=1\nexport OK='v'\n"), {"OK": "v"})
 
 
 @SKIP_ON_WINDOWS
@@ -369,6 +402,7 @@ class LifecycleContract(unittest.TestCase):
         (self.root / "tooling~/node_modules").mkdir()
         for name in (
             POST_START.name,
+            POST_START_PY.name,
             "env-autoload.sh",
             "install-env-autoload.sh",
             "install_env_autoload.py",
@@ -380,8 +414,6 @@ class LifecycleContract(unittest.TestCase):
         write_script(self.devcontainer / "cache-contract.sh", STUB_CACHE_CONTRACT)
         write_script(self.devcontainer / "install-agent-clis.sh", STUB_INSTALLER_OK)
         write_script(self.bin / "node", STUB_NODE)
-        write_script(self.bin / "timeout", STUB_TIMEOUT)
-        write_script(self.bin / "sleep", STUB_SLEEP)
         write_script(self.bin / "opencode", STUB_OPENCODE)
         (self.home / ".bashrc").touch()
         (self.home / ".profile").touch()
@@ -399,15 +431,18 @@ class LifecycleContract(unittest.TestCase):
     def seed(self, *lines: str) -> None:
         (self.root / ".env.local").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
 
-    def run_lifecycle(self, *args: str, **fake: str) -> subprocess.CompletedProcess[str]:
+    def run_lifecycle(self, *args: str, **env_overrides: str) -> subprocess.CompletedProcess[str]:
         env = sanitize_env()
         env.update(
             {
-                "DXT_FAKE_MCP_FAILURE": fake.get("mcp_failure", "0"),
-                "DXT_FAKE_OTHER_MCP_FAILURE": fake.get("other_failure", "0"),
+                "DXT_FAKE_MCP_FAILURE": env_overrides.pop("mcp_failure", "0"),
+                "DXT_FAKE_MCP_STDERR": env_overrides.pop("mcp_stderr", "0"),
+                "DXT_FAKE_MCP_MULTIROW": env_overrides.pop("mcp_multirow", "0"),
+                "DXT_FAKE_OTHER_MCP_FAILURE": env_overrides.pop("other_failure", "0"),
                 "HOME": str(self.home),
                 "WORKSPACE_FOLDER": str(self.root),
                 "PATH": f"{self.bin}:{LIFECYCLE_PATH}",
+                **env_overrides,
             }
         )
         return subprocess.run(
@@ -564,6 +599,60 @@ class LifecycleContract(unittest.TestCase):
         result = self.run_lifecycle("--attach")
         self.assertNotEqual(result.returncode, 0, "post-start attached with a v1-only OpenCode")
         self.assertIn("OpenCode v2 is required", result.stderr)
+
+    def test_a_legacy_bash_env_loader_never_reaches_the_service(self) -> None:
+        # post-start strips BASH_ENV before any child runs: a global loader
+        # would hand every agent subprocess the file's contents.
+        self.seed("UNITY_MCP_BEARER_TOKEN=rotated-token")
+        result = self.run_lifecycle("--attach", BASH_ENV="/tmp/leak-loader.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(
+            "BASH_ENV=<unset>",
+            self.service_tokens(),
+            "a legacy BASH_ENV loader reached the restarted OpenCode service",
+        )
+
+    def test_the_autoload_disable_flag_keeps_credentials_from_the_service(self) -> None:
+        # The same flag agent launchers set to scrub inherited secrets must
+        # also keep the checkout's own credentials out of this lifecycle.
+        self.seed("UNITY_MCP_BEARER_TOKEN=scrubbed-token")
+        result = self.run_lifecycle("--attach", DXT_ENV_AUTOLOAD_DISABLED="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(
+            "UNITY=<unset>",
+            self.service_tokens(),
+            "DXT_ENV_AUTOLOAD_DISABLED did not keep the seeded credential from the service",
+        )
+
+    def test_a_rejection_reported_on_stderr_still_stops_the_service(self) -> None:
+        # The probe reads the mcp list the way bash command substitution did:
+        # stderr merged, output used whatever the exit code was.
+        result = self.run_lifecycle("--attach", mcp_stderr="1")
+        self.assertIn("rejected the Unity credentials", result.stderr)
+        self.assertIn("service stop", self.calls(), "a stderr-reported rejection did not stop the OpenCode service")
+
+    def test_a_rejected_row_beside_a_healthy_one_still_stops_the_service(self) -> None:
+        # Every unity-mcp row decides the probe, not just the first: a stale
+        # duplicate entry running on rejected credentials must be stopped.
+        result = self.run_lifecycle("--attach", mcp_multirow="1")
+        self.assertIn("rejected the Unity credentials", result.stderr)
+        self.assertIn("service stop", self.calls(), "a rejected duplicate unity-mcp row did not stop the service")
+
+    def test_prepare_stops_after_the_readiness_gate(self) -> None:
+        # updateContentCommand: repair, configure, and verify v2 - but never
+        # touch the service, the rc files, or the background refresh.
+        result = self.run_lifecycle("--prepare")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("service restart", self.calls(), "--prepare restarted the OpenCode service")
+        self.assertNotIn(
+            "# >>> dxcommandterminal .env.local autoload >>>",
+            (self.home / ".bashrc").read_text(encoding="utf-8"),
+            "--prepare installed the interactive autoload block",
+        )
+
+    def test_an_unknown_mode_is_refused(self) -> None:
+        result = self.run_lifecycle("--frobnicate")
+        self.assertEqual(result.returncode, 2, "an unknown lifecycle mode was not refused")
 
 
 if __name__ == "__main__":

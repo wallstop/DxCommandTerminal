@@ -76,6 +76,9 @@ Offline launches keep working: configure uses the baked dependencies, and the im
 | `postStartCommand`     | `post-start.sh`           | Ownership repair, offline MCP configure, OpenCode service credential refresh, and background CLI refresh                                                           |
 | `postAttachCommand`    | `post-start.sh --attach`  | Refresh credentials, MCP config, and an existing OpenCode service after reattach                                                                                   |
 
+`post-start.sh` is a shim over the typed flow in `post_start.py` (stdlib only, covered by the pinned pyright gate). The shared contracts stay in their single implementations and
+are invoked through their tracked entries: `ai-backends.sh env`, `cache-contract.sh`, `install-env-autoload.sh`, `verify-opencode.sh`, and `install-agent-clis.sh`.
+
 Logs for the background refresh: `/tmp/dxt-agent-cli-refresh.log`.
 
 ## No sudo, by construction
