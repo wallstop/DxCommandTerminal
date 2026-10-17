@@ -16,6 +16,11 @@ Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/uni
   diagnostics prefix; package id, namespaces, type names, and persisted paths keep their old names so existing projects and saved settings upgrade in place
   ([#232](https://github.com/wallstop/DxCommandTerminal/issues/232)).
 
+### Added
+
+- Add `CommandArg.AddQuote`, which appends one quote character to `Quotes` in place without touching the rest of the configuration
+  ([#229](https://github.com/wallstop/DxCommandTerminal/issues/229)).
+
 ### Fixed
 
 - Fix generated catalog compilation for signed execution context masks ([#285](https://github.com/wallstop/DxCommandTerminal/issues/285)).

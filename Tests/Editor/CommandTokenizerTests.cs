@@ -73,6 +73,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
+        [Test]
+        public void AddedQuoteGroupsArgumentsUnderTheAddedCharacter()
+        {
+            CommandArg.AddQuote('^');
+            List<CommandToken> tokens = Tokenize("log ^two words^");
+
+            Assert.AreEqual(2, tokens.Count, $"Expected the command and one grouped argument, got {tokens.Count}");
+            Assert.AreEqual("log", tokens[0].Contents);
+            Assert.AreEqual("two words", tokens[1].Contents, "The added quote character must group like the defaults do");
+            Assert.AreEqual('^', tokens[1].StartQuote);
+            Assert.AreEqual('^', tokens[1].EndQuote);
+        }
+
         [TestCase("$target", "\"$target\"")]
         [TestCase("$", "\"$\"")]
         [TestCase("$target's", "\"$target's\"")]
@@ -404,6 +417,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(line.Length, largeStart);
             Assert.AreEqual(0, largeLength);
             Assert.IsTrue(largeNew);
+        }
+
+        [SetUp]
+        [TearDown]
+        public void CleanUp()
+        {
+            /*
+                Tests here edit the public quote set, and the tokenizer reads
+                it as static state; only the play-session reset puts it back,
+                so a failing test cannot leak its mutation into the next one.
+             */
+            CommandArg.ResetForNextPlaySession();
         }
     }
 }

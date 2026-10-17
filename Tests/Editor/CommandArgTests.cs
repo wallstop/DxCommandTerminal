@@ -3281,6 +3281,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void AddQuoteAppendsOneCharacterAndKeepsTheListInstance()
+        {
+            List<char> quotes = CommandArg.Quotes;
+            CommandArg.AddQuote('^');
+            CommandArg.AddQuote('^');
+
+            Assert.AreSame(quotes, CommandArg.Quotes, "AddQuote must mutate the list readers already hold, not replace it");
+            CollectionAssert.AreEquivalent(new[] { '"', '\'', '^' }, CommandArg.Quotes, $"Quotes after a duplicate add: [{string.Join(string.Empty, CommandArg.Quotes)}]");
+        }
+
+        [Test]
+        public void ResetParsingConfigurationRemovesAnAddedQuote()
+        {
+            CommandArg.AddQuote('^');
+            CommandArg.ResetParsingConfiguration();
+
+            CollectionAssert.AreEquivalent(new[] { '"', '\'' }, CommandArg.Quotes, $"Quotes after reset: [{string.Join(string.Empty, CommandArg.Quotes)}]");
+        }
+
+        [Test]
         public void ResetParsingConfigurationRestoresAllControlSets()
         {
             CommandArg.SetDelimiters('|');
