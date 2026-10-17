@@ -87,9 +87,11 @@ test("a packaged edit re-exports; an excluded edit does not", async () => {
   assert.strictEqual(stable.buffer.equals(afterEdit.buffer), true, "the answer is unchanged");
 
   /*
-      Leave the variant root's packaged bytes canonical: the next run's
-      first export then answers from the canonical cache entry instead of
-      paying the npm query again.
+      Leave the variant root's packaged bytes canonical so a later run's
+      materialization is a no-op. The restore still bumps the restored
+      files' mtimes, so that run's before-edit export re-keys and pays one
+      `npm pack` - the win over master is that the edit-adjacent excluded
+      edit and every canonical-root export stay cache hits.
    */
   fs.writeFileSync(path.join(packageRoot, "Runtime", "Foo.cs"), "// foo\n");
   fs.writeFileSync(path.join(packageRoot, "Runtime", "Analyzers", "Payload.dll"), "binary payload\n");

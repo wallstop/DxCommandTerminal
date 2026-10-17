@@ -82,7 +82,14 @@ export function persistentFixturePackage({ name = "test.pkg", version = "0.1.0",
     } catch {
       /* Absent: write it. */
     }
-    fs.writeFileSync(target, content);
+    /*
+        Rename-into-place so a concurrent first materialization from another
+        suite process (a second worktree on this machine) can never hand a
+        reader a half-written fixture file.
+     */
+    const staged = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(staged, content);
+    fs.renameSync(staged, target);
   }
   return root;
 }

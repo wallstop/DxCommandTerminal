@@ -1244,6 +1244,9 @@ test("the markdown gate keys its own files, not the whole snapshot", async () =>
   );
   assert.equal(mdCheck.cacheTrackedFiles, undefined, "the whole-snapshot key would re-run the gate on any edit");
   assert.equal(mdCheck.cacheDependencies, true, "prettier runs from node_modules; its tree must key the gate");
+  assert.equal(mdCheck.cacheGit, true, "the probes below key git only if the real gate does");
+  assert.equal(mdCheck.cacheGitConfig, true, "the probes below key git config only if the real gate does");
+  assert.equal(mdCheck.cacheRuntimeEnvironment, true, "the probes below must mirror the real gate's environment folding");
   /*
       The key-identity probes run in a scratch repository carrying the real
       gate's spec arrays (shape-asserted above): the identity under test is
