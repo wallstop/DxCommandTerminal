@@ -117,7 +117,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int gen0Delta = System.GC.CollectionCount(0) - gen0Collections;
 
             Debug.Log(
-                $"[DxCommandTerminal][Scale] objects={objectCount} token='{token}' "
+                $"[DxTerminal][Scale] objects={objectCount} token='{token}' "
                     + $"results={results.Count} samples={sampleCount} "
                     + $"median={median:F3}ms p95={p95:F3}ms max={max:F3}ms gen0={gen0Delta}"
             );
@@ -193,7 +193,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int gen0Delta = System.GC.CollectionCount(0) - gen0Collections;
 
             Debug.Log(
-                $"[DxCommandTerminal][Scale] parse objects={objectCount} "
+                $"[DxTerminal][Scale] parse objects={objectCount} "
                     + $"target='{targetName}' samples={sampleCount} "
                     + $"median={median:F3}ms p95={p95:F3}ms max={max:F3}ms gen0={gen0Delta}"
             );

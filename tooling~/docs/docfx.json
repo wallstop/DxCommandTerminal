@@ -49,9 +49,9 @@
         ],
         "dest": "obj/_site",
         "globalMetadata": {
-            "_appTitle": "DxCommandTerminal",
-            "_appName": "DxCommandTerminal",
-            "_appFooter": "DxCommandTerminal - Wallstop Studios - MIT",
+            "_appTitle": "DxTerminal",
+            "_appName": "DxTerminal",
+            "_appFooter": "DxTerminal - Wallstop Studios - MIT",
             "_disableContribution": true
         }
     }

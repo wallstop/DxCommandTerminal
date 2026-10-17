@@ -97,7 +97,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
-                        $"[DxCommandTerminal] TypeCache command discovery failed for assembly " + $"{assembly.GetName().Name}: {e}; discovery continues " + $"by reflection"
+                        $"[DxTerminal] TypeCache command discovery failed for assembly " + $"{assembly.GetName().Name}: {e}; discovery continues " + $"by reflection"
                     )
                 );
                 return TypeCacheSnapshot.Unknown;

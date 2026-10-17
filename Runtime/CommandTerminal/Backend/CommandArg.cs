@@ -462,6 +462,21 @@
         }
 
         /// <summary>
+        ///     Adds <paramref name="quote" /> to <see cref="Quotes" /> when it
+        ///     is not already present, leaving the rest of the quote
+        ///     configuration alone. The list stays the same instance; adding a
+        ///     character that is already a quote does nothing, and
+        ///     <see cref="ResetParsingConfiguration" /> removes it again.
+        /// </summary>
+        public static void AddQuote(char quote)
+        {
+            if (!Quotes.Contains(quote))
+            {
+                Quotes.Add(quote);
+            }
+        }
+
+        /// <summary>
         ///     Restores every parsing control set to its default contents, the
         ///     same restore the play-session reset applies. A game that
         ///     re-applies its configuration per session calls this first, then

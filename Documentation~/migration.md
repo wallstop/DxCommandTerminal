@@ -1,11 +1,11 @@
 # Migrating from Command Terminal
 
-DxCommandTerminal is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal). The terminal workflow is the same: attach a UI component, toggle with a hotkey,
-Tab completes, Up/Down walks history. Names and behaviors changed where the fork fixed bugs or tightened guarantees.
+DxTerminal (previously shipped as DxCommandTerminal) is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal). The terminal workflow is the same: attach a
+UI component, toggle with a hotkey, Tab completes, Up/Down walks history. Names and behaviors changed where the fork fixed bugs or tightened guarantees.
 
 ## API mapping
 
-| Command Terminal                      | DxCommandTerminal                                                                                                             |
+| Command Terminal                      | DxTerminal                                                                                                                    |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `CommandArg.Int` / `.Float` / `.Bool` | `CommandArg.TryGet<T>(out T value)` - returns `false` on bad input instead of defaulting and logging                          |
 | `Shell.RegisterCommands()`            | Automatic: a source-generated catalog per assembly loads at shell startup (see [Source-generated registration](generator.md)) |

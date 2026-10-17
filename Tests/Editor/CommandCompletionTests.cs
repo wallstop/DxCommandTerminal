@@ -214,7 +214,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                      */
                     LogAssert.Expect(
                         LogType.Error,
-                        new Regex(@"\[DxCommandTerminal\] Completion provider for 'callback-choice' failed: " + @"System\.InvalidOperationException: choice failed")
+                        new Regex(@"\[DxTerminal\] Completion provider for 'callback-choice' failed: " + @"System\.InvalidOperationException: choice failed")
                     );
                 }
 

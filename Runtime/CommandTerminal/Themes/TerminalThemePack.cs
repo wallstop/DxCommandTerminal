@@ -4,7 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
     using UnityEngine;
     using UnityEngine.UIElements;
 
-    [CreateAssetMenu(menuName = "Wallstop Studios/DxCommandTerminal/Theme Pack", fileName = nameof(TerminalThemePack), order = 1_111_123)]
+    [CreateAssetMenu(menuName = "Wallstop Studios/DxTerminal/Theme Pack", fileName = nameof(TerminalThemePack), order = 1_111_123)]
     public class TerminalThemePack : ScriptableObject
     {
         public virtual IReadOnlyList<StyleSheet> Themes => _themes;

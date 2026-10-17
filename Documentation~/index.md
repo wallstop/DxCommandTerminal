@@ -1,4 +1,4 @@
-# DxCommandTerminal
+# DxTerminal
 
 A performance-first in-game console for Unity: a toggleable terminal, a quick-launch command bar, typed command registration, and contextual completion. Unity 2021.3 or newer, MIT
 licensed.

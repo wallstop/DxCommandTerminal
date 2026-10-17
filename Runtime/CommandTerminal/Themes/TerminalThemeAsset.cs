@@ -15,7 +15,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
         TerminalThemePack like any hand-written one and is never read back by
         this asset, so runtime behavior and shipped packs are unchanged.
      */
-    [CreateAssetMenu(menuName = "Wallstop Studios/DxCommandTerminal/Theme Asset", fileName = "NewTerminalTheme", order = 1_111_124)]
+    [CreateAssetMenu(menuName = "Wallstop Studios/DxTerminal/Theme Asset", fileName = "NewTerminalTheme", order = 1_111_124)]
     public sealed class TerminalThemeAsset : ScriptableObject
     {
         /*

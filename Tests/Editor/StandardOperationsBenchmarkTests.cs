@@ -13,9 +13,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         Standard-operations timing baselines for issue #108 (performance and
         allocation campaign): backend startup, typing completion, command
         execution, logging, history traversal, and provider completion. The
-        Measures... methods log evidence under [DxCommandTerminal][Scale]
+        Measures... methods log evidence under [DxTerminal][Scale]
         and pin no budgets. The ...StaysUnderTripwire methods are generous
-        regression tripwires sized from this suite's own [DxCommandTerminal]
+        regression tripwires sized from this suite's own [DxTerminal]
         [Scale] evidence on the pinned local editor (Unity 6000.4.6f1); they
         are environment-specific and are not the plan's numeric gates. All
         windows are warmed steady state. Allocation claims live in the
@@ -145,7 +145,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static void LogScale(string operation, string detail, OperationReport report)
         {
             Debug.Log(
-                $"[DxCommandTerminal][Scale] op={operation} {detail} "
+                $"[DxTerminal][Scale] op={operation} {detail} "
                     + $"samples={report.SampleCount} "
                     + $"median={report.MedianMilliseconds:F3}ms "
                     + $"p95={report.Percentile95Milliseconds:F3}ms "
@@ -300,9 +300,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogScale("log-read-under-flood", $"window={LogCapacity}", contendedRead);
             double perWriteMicroseconds = writerMilliseconds * 1000.0 / writes;
             Debug.Log(
-                $"[DxCommandTerminal][Scale] op=log-write-under-flood aggregate=total/n "
-                    + $"writes={writes} totalMs={writerMilliseconds:F3} "
-                    + $"perWriteUs={perWriteMicroseconds:F4}"
+                $"[DxTerminal][Scale] op=log-write-under-flood aggregate=total/n " + $"writes={writes} totalMs={writerMilliseconds:F3} " + $"perWriteUs={perWriteMicroseconds:F4}"
             );
         }
 

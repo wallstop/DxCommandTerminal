@@ -4,7 +4,7 @@ Commands are plain C#. The typed builder below registers a `heal` command with a
 
 ## The sample
 
-The typed-builder sample ships with the package (`Package Manager > DxCommandTerminal > Samples > Import`). Its simplest component (staged at build time from
+The typed-builder sample ships with the package (`Package Manager > DxTerminal > Samples > Import`). Its simplest component (staged at build time from
 `Samples~/TerminalCommands/SimpleCommands.cs`, so this excerpt is always the shipped code):
 
 [!code-csharp[SimpleCommands](samples/SimpleCommands.cs)]
