@@ -302,6 +302,48 @@ class EnvExportParsingContract(unittest.TestCase):
 
 
 @SKIP_ON_WINDOWS
+class RunOutputTimeoutContract(unittest.TestCase):
+    """run_output keeps what a probe printed before its deadline, like bash
+    command substitution kept what `timeout` did not stop in time."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        spec = importlib.util.spec_from_file_location("dxt_post_start", POST_START_PY)
+        assert spec is not None and spec.loader is not None
+        cls.post_start = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.post_start)
+
+    def write_stub(self, stdout_line: str, stderr_line: str) -> Path:
+        stub = Path(tempfile.mkdtemp(prefix="dxt-run-output-")) / "stub.sh"
+        self.addCleanup(shutil.rmtree, stub.parent, True)
+        write_script(
+            stub,
+            "#!/usr/bin/env bash\n"
+            f"printf '%s\\n' '{stdout_line}'\n"
+            f"printf '%s\\n' '{stderr_line}' >&2\n"
+            "sleep 30\n",
+        )
+        return stub
+
+    def test_stdout_printed_before_the_deadline_is_returned(self) -> None:
+        stub = self.write_stub("http://127.0.0.1:49374", "ignored: stderr discarded")
+        result = self.post_start.run_output([str(stub)], timeout=1, merge_stderr=False)
+        self.assertEqual(result, "http://127.0.0.1:49374", "a status URL printed before the deadline was discarded")
+
+    def test_stderr_merged_output_printed_before_the_deadline_is_returned(self) -> None:
+        stub = self.write_stub("ignored: stdout merged", "✗ unity-mcp failed: Unauthorized")
+        result = self.post_start.run_output([str(stub)], timeout=1, merge_stderr=True)
+        self.assertEqual(
+            result,
+            "ignored: stdout merged\n✗ unity-mcp failed: Unauthorized",
+            "a rejection printed before the deadline was discarded",
+        )
+
+    def test_a_missing_binary_is_empty(self) -> None:
+        self.assertEqual(self.post_start.run_output(["dxt-definitely-missing-binary"], timeout=1, merge_stderr=True), "")
+
+
+@SKIP_ON_WINDOWS
 class NpmRangeResolverContract(unittest.TestCase):
     """Exercise the real resolver against a stubbed registry."""
 

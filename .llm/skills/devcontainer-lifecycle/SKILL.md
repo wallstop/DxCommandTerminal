@@ -41,6 +41,11 @@ Consequences that have each caused a real failure:
   the autoload path).
 - A nameref must not share a name with a local of its own function: a ref named like a local resolves to that local, the caller's variable stays empty, and nothing errors. Name the
   refs and the working locals apart.
+- Porting `output="$(timeout N cmd || true)"` to Python: a timeout is not "no output". Bash command substitution keeps what the command printed before `timeout` killed it, and
+  POSIX `subprocess.run` attaches that partial output to the `TimeoutExpired` exception - as **bytes even under `text=True`** (decode with `errors="replace"`). Discarding it makes
+  a probe go blind exactly when the CLI is slow: a rejection or URL printed before the deadline is lost, and a state decision (restart, stop, skip) flips on the wrong branch. Where
+  partial output can change a decision, use it (`post_start.run_output`; pinned by `RunOutputTimeoutContract`); where it cannot (best-effort refresh counters that re-run next
+  start), fail-as-attempted is fine - say which in the handler's comment (`install_agent_clis.run`).
 
 ## Fail-closed readiness
 

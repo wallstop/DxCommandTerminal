@@ -125,9 +125,20 @@ def autoload(workspace: Path) -> None:
     os.environ.pop("DXT_WORKSPACE_ROOT", None)
 
 
+def partial_output(expired: subprocess.TimeoutExpired) -> str:
+    """What a killed command printed before its deadline. Bash command
+    substitution kept it, and POSIX `subprocess.run` attaches it to the
+    exception as bytes even under text mode."""
+    output = expired.stdout or ""
+    if isinstance(output, bytes):
+        output = output.decode("utf-8", errors="replace")
+    return output.rstrip("\n")
+
+
 def run_output(command: list[str], timeout: float, merge_stderr: bool) -> str:
     """Capture output like bash command substitution: the exit code is not a
-    verdict, and a merged stderr is part of what the CLI had to say."""
+    verdict, a merged stderr is part of what the CLI had to say, and output
+    written before the deadline still counts."""
     try:
         completed = subprocess.run(
             command,
@@ -136,7 +147,9 @@ def run_output(command: list[str], timeout: float, merge_stderr: bool) -> str:
             timeout=timeout,
             text=True,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired as expired:
+        return partial_output(expired)
+    except OSError:
         return ""
     return completed.stdout.rstrip("\n")
 
