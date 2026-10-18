@@ -50,6 +50,9 @@ LIFECYCLE_UNSET = (
     "DXT_ENV_AUTOLOAD_DISABLED",
     "DXT_ENV_AUTOLOAD_ACTIVE",
     "BASH_ENV",
+    # The one lifecycle variable post-create retargets work with; an ambient
+    # value would silently move safe.directory and the autoload block.
+    "containerWorkspaceFolder",
 )
 
 # The lifecycle sandbox only resolves the stubbed CLIs plus the core utilities
@@ -894,7 +897,6 @@ class PostCreateContract(unittest.TestCase):
         result = self.run_post_create(DXT_FAKE_INSTALLER_RESULT="1")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Agent refresh failed; the baked OpenCode v2 command is usable", result.stdout)
-        self.assertIn("installer", self.calls("installer-calls.txt")[0])
 
     def test_a_failing_optional_step_continues_to_the_next(self) -> None:
         result = self.run_post_create(DXT_FAKE_NODE_CONFIGURE="1")

@@ -13,10 +13,11 @@ with post_start.py and the validate scripts), `install-agent-clis.sh`,
 `verify-opencode.sh`, `install-env-autoload.sh` (the shared, bounded autoload
 lock), and `ai-backends.sh install`.
 
-One deliberate fidelity fix: the bash summary piped the CLI version probes
-through `head -n1`, whose exit status masked a missing CLI and left an empty
-cell; the typed panel answers N/A there, which is what the piped
-`|| echo 'N/A'` always meant.
+One deliberate simplification: the bash summary piped the CLI version probes
+through `head -n1`, so a CLI that printed a version and then exited nonzero
+answered "output\\nN/A" (pipefail fired the `|| echo 'N/A'` behind the partial
+output); the typed panel answers N/A whenever a probe fails, partial output
+included.
 """
 from __future__ import annotations
 
@@ -169,7 +170,8 @@ def configure_npm_prefix() -> bool:
     and failed here; the typed flow keeps that shape.
     """
     log_header("Configuring npm Global Prefix (sudo-free installs)")
-    home = os.environ.get("HOME", "")
+    # Missing HOME dies here, like bash's set -u died on the unbound variable.
+    home = os.environ["HOME"]
     try:
         os.makedirs(f"{home}/.local/bin", exist_ok=True)
     except OSError:
@@ -255,7 +257,12 @@ def validate_workspace(workspace: Path) -> None:
 
 
 def version_probe(command: list[str]) -> str:
-    """First stdout line, or N/A when the probe is missing or fails."""
+    """First stdout line, or N/A when the probe is missing or fails.
+
+    Bash truncated only the four agent CLIs through `head -n1`; the three
+    tool probes printed in full. All are single-line in practice, so every
+    probe takes the first line.
+    """
     try:
         completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     except OSError:

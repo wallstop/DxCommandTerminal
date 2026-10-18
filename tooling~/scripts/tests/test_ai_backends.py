@@ -37,7 +37,6 @@ REPO_ROOT = Path(__file__).parents[3]
 DEVCONTAINER = REPO_ROOT / ".devcontainer"
 BACKENDS = DEVCONTAINER / "ai-backends.sh"
 ENV_AUTOLOAD = DEVCONTAINER / "env-autoload.sh"
-POST_CREATE = DEVCONTAINER / "post-create.sh"
 
 # Every managed credential name `ai-backends.sh env` can export. An
 # interactive devcontainer shell carries the whole set (the rc autoload), so
@@ -728,13 +727,13 @@ class PostCreateAutoloadContract(BackendsTestCase):
                 "# <<< dxcommandterminal .env.local autoload <<<\n",
                 encoding="utf-8",
             )
-        # Sourcing post-create.sh only defines functions and enables
-        # -euo pipefail (main is guarded); relax the flags for the calls.
+        # install-env-autoload.sh is the single implementation every lifecycle
+        # (bash and typed) invokes for this work; drive it directly.
         result = subprocess.run(
             [
                 "/bin/bash", "-c",
-                '. "$1"; set +e +u; ensure_env_local_autoload "$2"; ensure_env_local_autoload "$2"',
-                "_", str(POST_CREATE), str(autoload_root),
+                '. "$1"; install_env_local_autoload "$2"; install_env_local_autoload "$2"',
+                "_", str(DEVCONTAINER / "install-env-autoload.sh"), str(autoload_root),
             ],
             capture_output=True,
             text=True,
