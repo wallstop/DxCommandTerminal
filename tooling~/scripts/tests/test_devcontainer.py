@@ -906,6 +906,15 @@ class PostCreateContract(unittest.TestCase):
         self.assertEqual(self.calls("ai-backends-calls.txt"), ["install"])
         self.assertIn("# >>> dxcommandterminal .env.local autoload >>>", self.rc_text(".bashrc"))
 
+    def test_an_unusable_lock_path_degrades_to_the_optional_failure(self) -> None:
+        # A failing `flock` degraded to warn-and-continue in bash; an
+        # unwritable TMPDIR must not turn the configure step into a
+        # traceback that aborts the remaining bootstrap.
+        result = self.run_post_create(TMPDIR=str(self.root / "no-such-directory"))
+        self.assertEqual(result.returncode, 0, "an unusable lock path aborted the bootstrap")
+        self.assertIn("Configuring MCP servers for every agent front end failed (continuing)", result.stdout)
+        self.assertEqual(self.calls("ai-backends-calls.txt"), ["install"], "the bootstrap stopped at the lock")
+
     def test_a_missing_workspace_entry_is_a_warning_not_a_failure(self) -> None:
         (self.root / "Tests").rmdir()
         result = self.run_post_create()

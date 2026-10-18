@@ -63,13 +63,18 @@ def tmp_dir() -> Path:
 def acquire_lock(path: Path, wait: float = LOCK_WAIT_SECONDS) -> Optional[IO[Any]]:
     """Hold an exclusive lock for up to `wait` seconds, mirroring flock -w.
 
-    Returns the open handle (release by closing it) or None on timeout. When
-    POSIX locks are unavailable the flow runs unlocked, like the bash guard.
+    Returns the open handle (release by closing it) or None when the lock
+    cannot be taken - a timeout or an unusable lock path, like a failing
+    flock. When POSIX locks are unavailable the flow runs unlocked, like the
+    bash guard.
     """
+    try:
+        handle = open(path, "a+b")
+    except OSError:
+        return None
     if fcntl is None:
         # No POSIX locks off Linux; run unlocked, like the bash command -v guard.
-        return open(path, "a+b")
-    handle = open(path, "a+b")
+        return handle
     deadline = time.monotonic() + wait
     while True:
         try:

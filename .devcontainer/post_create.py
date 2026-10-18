@@ -121,13 +121,19 @@ def run_optional(label: str, command: Optional[list[str]] = None, step: Optional
 def acquire_lock(path: Path, wait: float = MCP_LOCK_WAIT_SECONDS) -> Optional[IO[Any]]:
     """Hold an exclusive lock for up to `wait` seconds, mirroring flock -w.
 
-    Returns the open handle (release by closing it) or None on timeout. When
-    POSIX locks are unavailable the flow runs unlocked, like the bash
-    command -v guard.
+    Returns the open handle (release by closing it) or None when the lock
+    cannot be taken - a timeout or an unusable lock path, like a failing
+    flock. When POSIX locks are unavailable the flow runs unlocked, like the
+    bash command -v guard.
     """
+    try:
+        handle = open(path, "a+b")
+    except OSError:
+        # An unusable lock path degrades to the failure run_optional reports,
+        # not a traceback that would abort the remaining bootstrap steps.
+        return None
     if fcntl is None:
-        return open(path, "a+b")
-    handle = open(path, "a+b")
+        return handle
     deadline = time.monotonic() + wait
     while True:
         try:
@@ -178,12 +184,17 @@ def configure_npm_prefix() -> bool:
         pass  # The prefix steps below surface an unwritable home.
     log_info(f"Setting npm prefix to {home}/.local")
     run_visible(["npm", "config", "set", "prefix", f"{home}/.local"])
-    read_back = subprocess.run(
-        ["npm", "config", "get", "prefix"],
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    current = read_back.stdout.rstrip("\n")
+    try:
+        read_back = subprocess.run(
+            ["npm", "config", "get", "prefix"],
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        current = read_back.stdout.rstrip("\n")
+    except OSError:
+        # A missing npm answered an empty substitution in bash, which failed
+        # the mismatch check below.
+        current = ""
     expected = f"{home}/.local"
     if current != expected:
         log_error(f"npm prefix is '{current}', expected '{expected}'")
@@ -217,7 +228,7 @@ def configure_agent_mcps(devcontainer: Path, workspace: Path) -> bool:
     mcp_script = devcontainer.parent / "tooling~" / "scripts" / "mcp" / "unity-mcp.mjs"
     lock = acquire_lock(tmp_dir() / "dxt-mcp-configure.lock")
     if lock is None:
-        print(f"{PREFIX} Timed out waiting for the MCP configure lock.", file=sys.stderr)
+        print(f"{PREFIX} Could not take the MCP configure lock.", file=sys.stderr)
         return False
     try:
         # The lock guards the configure run only, like `flock node` did.
