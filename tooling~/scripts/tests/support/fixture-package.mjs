@@ -37,16 +37,6 @@ const FIXTURE_ASMDEF = {
   noEngineReferences: false
 };
 
-export function makeFixturePackage(root, { name = "test.pkg", version = "0.1.0" } = {}) {
-  fs.mkdirSync(root, { recursive: true });
-  for (const [relative, content] of fixtureFileBodies({ name, version })) {
-    const target = path.join(root, relative);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, content);
-  }
-  return root;
-}
-
 /*
     A stable home for one fixture shape, for the tests that export with
     `cache: true`: the exporter's pack query (`npm pack --dry-run`, a few

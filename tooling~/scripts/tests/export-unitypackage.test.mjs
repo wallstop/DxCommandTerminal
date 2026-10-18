@@ -85,9 +85,26 @@ function makeFixture(root) {
   fs.writeFileSync(path.join(root, "Samples~", "Widget.cs"), "// sample\n");
 }
 
+/*
+    The three read-only exports (artifact structure, Samples~ exclusion,
+    root prefix) assert the same fixture shape, so they share one root:
+    the exporter memoizes the pack query per resolved root within this
+    process, and three roots would pay three `npm pack` spawns for the
+    same bytes. Every export here still runs the cache:false release path
+    through real npm; only identical roots are shared. The tests that
+    mutate a fixture keep their own fresh roots.
+ */
+let sharedRoot;
+function sharedFixture() {
+  if (sharedRoot === undefined) {
+    sharedRoot = tempRoot("shared");
+    makeFixture(sharedRoot);
+  }
+  return sharedRoot;
+}
+
 test("exported artifact carries every fixture asset under the import root", () => {
-  const root = tempRoot("structure");
-  makeFixture(root);
+  const root = sharedFixture();
   const result = exportUnityPackage({ packageRoot: root, out: "" });
   const entries = entryMap(readArtifact(result.buffer));
 
@@ -118,8 +135,7 @@ test("exported artifact carries every fixture asset under the import root", () =
 });
 
 test("Samples~ content is excluded from the artifact", () => {
-  const root = tempRoot("samples");
-  makeFixture(root);
+  const root = sharedFixture();
   const result = exportUnityPackage({ packageRoot: root, out: "" });
   const entries = readArtifact(result.buffer).map((entry) => entry.name);
   assert.ok(entries.every((name) => !name.includes("Samples~")));
@@ -131,8 +147,7 @@ test("Samples~ content is excluded from the artifact", () => {
 });
 
 test("root prefix override moves the import destination", () => {
-  const root = tempRoot("prefix");
-  makeFixture(root);
+  const root = sharedFixture();
   const result = exportUnityPackage({ packageRoot: root, out: "", rootPrefix: "Assets/test.pkg/" });
   const entries = readArtifact(result.buffer);
   const pathname = entries.find((entry) => entry.name.endsWith("/pathname")).content.toString("utf8");

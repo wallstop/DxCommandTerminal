@@ -26,6 +26,8 @@ DEVCONTAINER = REPO_ROOT / ".devcontainer" / "devcontainer.json"
 DOCKERFILE = REPO_ROOT / ".devcontainer" / "Dockerfile"
 INSTALLER = REPO_ROOT / ".devcontainer" / "install-agent-clis.sh"
 INSTALLER_PY = REPO_ROOT / ".devcontainer" / "install_agent_clis.py"
+POST_CREATE = REPO_ROOT / ".devcontainer" / "post-create.sh"
+POST_CREATE_PY = REPO_ROOT / ".devcontainer" / "post_create.py"
 POST_START = REPO_ROOT / ".devcontainer" / "post-start.sh"
 POST_START_PY = REPO_ROOT / ".devcontainer" / "post_start.py"
 VERIFY_SCRIPT = REPO_ROOT / ".devcontainer" / "verify-opencode.sh"
@@ -48,6 +50,9 @@ LIFECYCLE_UNSET = (
     "DXT_ENV_AUTOLOAD_DISABLED",
     "DXT_ENV_AUTOLOAD_ACTIVE",
     "BASH_ENV",
+    # The one lifecycle variable post-create retargets work with; an ambient
+    # value would silently move safe.directory and the autoload block.
+    "containerWorkspaceFolder",
 )
 
 # The lifecycle sandbox only resolves the stubbed CLIs plus the core utilities
@@ -88,8 +93,60 @@ STUB_CACHE_CONTRACT = """#!/usr/bin/env bash
 cache_contract_repair_permissions() { return 0; }
 """
 
+STUB_CACHE_CONTRACT_FAIL = """#!/usr/bin/env bash
+cache_contract_repair_permissions() { return 1; }
+"""
+
 STUB_INSTALLER_OK = """#!/usr/bin/env bash
 exit 0
+"""
+
+STUB_INSTALLER = """#!/usr/bin/env bash
+printf '%s\\n' "installer $*" >> installer-calls.txt
+exit "${DXT_FAKE_INSTALLER_RESULT:-0}"
+"""
+
+STUB_AI_BACKENDS = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> ai-backends-calls.txt
+printf 'BASH_ENV=%s\\n' "${BASH_ENV-<unset>}" >> ai-backends-bash-env.txt
+"""
+
+STUB_DOTNET = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> dotnet-calls.txt
+printf '%s\\n' '9.0.100'
+"""
+
+STUB_PRE_COMMIT = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> precommit-calls.txt
+"""
+
+# Answers the summary's `node --version` probe and records the MCP configure
+# run; the flip makes the optional configure step fail mid-bootstrap.
+STUB_NODE_CONFIGURE = """#!/usr/bin/env bash
+if [[ "${1:-}" == "--version" ]]; then
+    printf '%s\\n' 'v24.0.0'
+    exit 0
+fi
+if [[ "$*" == *"configure --offline"* ]]; then
+    if [[ "${DXT_FAKE_NODE_CONFIGURE:-0}" == "1" ]]; then
+        exit 1
+    fi
+    printf '%s\\n' "$*" >> node-calls.txt
+fi
+"""
+
+# Records every call and answers the prefix read-back the typed flow verifies.
+STUB_NPM_PREFIX = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> npm-calls.txt
+if [[ "${1:-} ${2:-}" == "config get" ]]; then
+    printf '%s\\n' "${NPM_FAKE_PREFIX:-$HOME/.local}"
+fi
+"""
+
+# A legacy global loader: every non-interactive bash child sources it when
+# BASH_ENV names it. The path is filled in per sandbox at write time.
+BASH_ENV_LOADER = """#!/usr/bin/env bash
+printf 'sourced\\n' >> '$ROOT/bash-env-marker.txt'
 """
 
 STUB_NODE = """#!/usr/bin/env bash
@@ -695,6 +752,227 @@ class LifecycleContract(unittest.TestCase):
     def test_an_unknown_mode_is_refused(self) -> None:
         result = self.run_lifecycle("--frobnicate")
         self.assertEqual(result.returncode, 2, "an unknown lifecycle mode was not refused")
+
+
+@SKIP_ON_WINDOWS
+class PostCreateContract(unittest.TestCase):
+    """post-create repairs, configures, and bootstraps; fatal steps stop it.
+
+    The sandbox mirrors the LifecycleContract harness: real tracked entries
+    for the typed flow, stubbed CLIs and optional tools, and a sanitized PATH
+    so nothing outside the sandbox can answer a probe.
+    """
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp(prefix="dxt-post-create-"))
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.devcontainer = self.root / ".devcontainer"
+        self.devcontainer.mkdir()
+        self.bin = self.root / "bin"
+        self.bin.mkdir()
+        self.home = self.root / "home"
+        self.home.mkdir()
+        (self.root / "tooling~/scripts/mcp").mkdir(parents=True)
+        (self.root / "tooling~/node_modules").mkdir()
+        for name in (
+            POST_CREATE.name,
+            POST_CREATE_PY.name,
+            "install-env-autoload.sh",
+            "install_env_autoload.py",
+            VERIFY_SCRIPT.name,
+            "verify_opencode.py",
+        ):
+            shutil.copy2(REPO_ROOT / ".devcontainer" / name, self.devcontainer / name)
+        write_script(self.devcontainer / "cache-contract.sh", STUB_CACHE_CONTRACT)
+        write_script(self.devcontainer / "install-agent-clis.sh", STUB_INSTALLER)
+        write_script(self.devcontainer / "ai-backends.sh", STUB_AI_BACKENDS)
+        write_script(self.bin / "node", STUB_NODE_CONFIGURE)
+        write_script(self.bin / "npm", STUB_NPM_PREFIX)
+        write_script(self.bin / "dotnet", STUB_DOTNET)
+        write_script(self.bin / "pre-commit", STUB_PRE_COMMIT)
+        write_script(self.bin / "opencode", FAKE_OPENCODE_V2)
+        write_script(self.bin / "opencode2", FAKE_OPENCODE2_V2)
+        (self.home / ".bashrc").touch()
+        (self.home / ".profile").touch()
+        (self.root / "package.json").write_text("", encoding="utf-8")
+        for name in ("Runtime", "Editor", "Tests"):
+            (self.root / name).mkdir()
+
+    def calls(self, name: str) -> List[str]:
+        record = self.root / name
+        if not record.exists():
+            return []
+        return record.read_text(encoding="utf-8").splitlines()
+
+    def run_post_create(self, **env_overrides: str) -> subprocess.CompletedProcess[str]:
+        env = sanitize_env()
+        env.update(
+            {
+                "HOME": str(self.home),
+                "TMPDIR": str(self.root),
+                "PATH": f"{self.bin}:{LIFECYCLE_PATH}",
+                **env_overrides,
+            }
+        )
+        return subprocess.run(
+            ["/bin/bash", str(self.devcontainer / "post-create.sh")],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=180,
+        )
+
+    def rc_text(self, name: str) -> str:
+        return (self.home / name).read_text(encoding="utf-8")
+
+    def test_bootstrap_completes_and_records_every_step(self) -> None:
+        result = self.run_post_create()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # The prefix is set and verified against the read-back.
+        self.assertIn(f"config set prefix {self.home}/.local", self.calls("npm-calls.txt"))
+        self.assertIn("Cache mounts are user-writable", result.stdout)
+        self.assertIn(f"npm prefix configured: {self.home}/.local", result.stdout)
+        # The rc files gain the user-global PATH line exactly once each.
+        for rc in (".bashrc", ".profile"):
+            self.assertEqual(
+                line_count(self.rc_text(rc), 'export PATH="$HOME/.local/bin:$PATH"'),
+                1,
+                f"{rc} did not gain exactly one PATH line",
+            )
+        # The optional bootstrap steps all ran: MCP configure, launchers,
+        # .NET tools, pre-commit, and the autoload block in both rc files.
+        self.assertEqual(len(self.calls("node-calls.txt")), 1, "the MCP configure run was not recorded")
+        self.assertIn("configure --offline", self.calls("node-calls.txt")[0])
+        self.assertEqual(self.calls("ai-backends-calls.txt"), ["install"])
+        self.assertIn("tool restore", self.calls("dotnet-calls.txt"))
+        self.assertIn("install", self.calls("precommit-calls.txt"))
+        self.assertIn("# >>> dxcommandterminal .env.local autoload >>>", self.rc_text(".bashrc"))
+        gitconfig = (self.home / ".gitconfig").read_text(encoding="utf-8")
+        self.assertIn("[safe]", gitconfig)
+        self.assertIn(f"directory = {self.root}", gitconfig)
+        # The welcome panel names the workspace and reports every check.
+        self.assertIn(f"Workspace:      {self.root}", result.stdout)
+        self.assertIn("Workspace validation: 4/4 checks passed", result.stdout)
+        self.assertIn("Environment setup complete!", result.stdout)
+
+    def test_the_path_line_stays_single_after_a_rerun(self) -> None:
+        self.assertEqual(self.run_post_create().returncode, 0)
+        result = self.run_post_create()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for rc in (".bashrc", ".profile"):
+            self.assertEqual(
+                line_count(self.rc_text(rc), 'export PATH="$HOME/.local/bin:$PATH"'),
+                1,
+                f"a rerun appended a second PATH line to {rc}",
+            )
+        self.assertEqual(self.calls("ai-backends-calls.txt"), ["install", "install"], "a rerun skipped a bootstrap step")
+
+    def test_a_failed_cache_repair_stops_before_the_prefix(self) -> None:
+        write_script(self.devcontainer / "cache-contract.sh", STUB_CACHE_CONTRACT_FAIL)
+        result = self.run_post_create()
+        self.assertNotEqual(result.returncode, 0, "a failed cache repair did not stop post-create")
+        self.assertIn("Volume permission repair failed", result.stderr)
+        self.assertNotIn("Configuring npm Global Prefix", result.stdout, "the prefix ran after a failed cache repair")
+        self.assertEqual(self.calls("npm-calls.txt"), [])
+
+    def test_a_prefix_mismatch_stops_the_bootstrap(self) -> None:
+        result = self.run_post_create(NPM_FAKE_PREFIX="/usr")
+        self.assertNotEqual(result.returncode, 0, "an uncorrected npm prefix passed readiness")
+        self.assertIn("npm prefix is '/usr', expected", result.stderr)
+        self.assertNotIn("Bootstrapping Workspace", result.stdout, "the bootstrap ran after a prefix mismatch")
+        self.assertEqual(self.calls("node-calls.txt"), [])
+
+    def test_a_failed_readiness_gate_stops_before_the_bootstrap(self) -> None:
+        write_script(self.bin / "opencode", STUB_OPENCODE_V1)
+        result = self.run_post_create()
+        self.assertNotEqual(result.returncode, 0, "post-create passed readiness with a v1-only OpenCode")
+        self.assertIn("No usable OpenCode v2 command is available", result.stderr)
+        self.assertIn("OpenCode v2 readiness check failed", result.stderr)
+        self.assertNotIn("Bootstrapping Workspace", result.stdout, "the bootstrap ran after a failed gate")
+        self.assertEqual(self.calls("node-calls.txt"), [])
+        # The prefix step precedes the gate and still ran.
+        self.assertIn(f"config set prefix {self.home}/.local", self.calls("npm-calls.txt"))
+
+    def test_a_failed_installer_with_a_usable_cli_still_succeeds(self) -> None:
+        result = self.run_post_create(DXT_FAKE_INSTALLER_RESULT="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Agent refresh failed; the baked OpenCode v2 command is usable", result.stdout)
+
+    def test_a_failing_optional_step_continues_to_the_next(self) -> None:
+        result = self.run_post_create(DXT_FAKE_NODE_CONFIGURE="1")
+        self.assertEqual(result.returncode, 0, "an optional configure failure failed post-create")
+        self.assertIn("Configuring MCP servers for every agent front end failed (continuing)", result.stdout)
+        # The steps after the failure still ran.
+        self.assertEqual(self.calls("ai-backends-calls.txt"), ["install"])
+        self.assertIn("# >>> dxcommandterminal .env.local autoload >>>", self.rc_text(".bashrc"))
+
+    def test_an_unusable_lock_path_degrades_to_the_optional_failure(self) -> None:
+        # A failing `flock` degraded to warn-and-continue in bash; an
+        # unwritable TMPDIR must not turn the configure step into a
+        # traceback that aborts the remaining bootstrap.
+        result = self.run_post_create(TMPDIR=str(self.root / "no-such-directory"))
+        self.assertEqual(result.returncode, 0, "an unusable lock path aborted the bootstrap")
+        self.assertIn("Configuring MCP servers for every agent front end failed (continuing)", result.stdout)
+        self.assertEqual(self.calls("ai-backends-calls.txt"), ["install"], "the bootstrap stopped at the lock")
+
+    def test_a_missing_workspace_entry_is_a_warning_not_a_failure(self) -> None:
+        (self.root / "Tests").rmdir()
+        result = self.run_post_create()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Tests not found", result.stdout)
+        self.assertIn("Workspace validation: 3/4 checks passed", result.stdout)
+
+    def test_a_summary_probe_answers_na_for_a_missing_cli(self) -> None:
+        result = self.run_post_create()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("    claude:        N/A", result.stdout, "a missing CLI left an empty summary cell")
+        self.assertIn("    nanocoder:     N/A", result.stdout)
+        self.assertIn("    .NET SDK:      9.0.100", result.stdout)
+        self.assertIn("    Node.js:       v24.0.0", result.stdout)
+        self.assertIn("    opencode:      opencode v2.0.16", result.stdout)
+
+    def test_container_workspace_folder_overrides_the_bootstrap_target(self) -> None:
+        overlay = "/opt/overlay/workspace"
+        result = self.run_post_create(containerWorkspaceFolder=overlay)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        gitconfig = (self.home / ".gitconfig").read_text(encoding="utf-8")
+        self.assertIn(overlay, gitconfig, "safe.directory did not use containerWorkspaceFolder")
+        self.assertIn(f"DXT_WORKSPACE_ROOT='{overlay}'", self.rc_text(".bashrc"), "the autoload block did not use containerWorkspaceFolder")
+
+    def test_a_legacy_bash_env_loader_never_reaches_the_children(self) -> None:
+        # The bash bootstrap unset BASH_ENV before anything ran; a global
+        # loader would otherwise hand every bash child its contents. The
+        # outer shim's own shell is not the contract (it sources BASH_ENV
+        # before python starts), the children's inherited environment is.
+        loader = self.root / "leak-loader.sh"
+        write_script(loader, BASH_ENV_LOADER.replace("$ROOT", str(self.root)))
+        result = self.run_post_create(BASH_ENV=str(loader))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls("ai-backends-calls.txt"), ["install"], "the bootstrap never ran its bash children")
+        self.assertEqual(
+            self.calls("ai-backends-bash-env.txt"),
+            ["BASH_ENV=<unset>"],
+            "a legacy BASH_ENV loader reached a bootstrap child",
+        )
+
+    def test_the_shim_delegates_to_the_typed_flow(self) -> None:
+        shim = POST_CREATE.read_text(encoding="utf-8")
+        self.assertIn("exec python3", shim, "post-create.sh must stay a thin shim over the typed entry")
+        self.assertIn("post_create.py", shim)
+        text = POST_CREATE_PY.read_text(encoding="utf-8")
+        for expected in (
+            '"BASH_ENV"',
+            "cache_contract_repair_permissions",
+            '"config", "set", "prefix"',
+            '"configure", "--offline"',
+            "dxt-mcp-configure.lock",
+            '"ai-backends.sh"',
+            'source "$1"; install_env_local_autoload "$2"',
+            '"safe.directory"',
+            "containerWorkspaceFolder",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, text)
 
 
 if __name__ == "__main__":
